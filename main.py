@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import time
 from dotenv import load_dotenv
-from utils import data_fetcher, risk_math, charts, news_fetcher
+import data_fetcher, risk_math, charts, news_fetcher
 from streamlit_autorefresh import st_autorefresh
 
 # --- 1. CONFIGURACIÓN TV MODE ---
