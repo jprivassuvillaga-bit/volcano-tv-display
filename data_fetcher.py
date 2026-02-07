@@ -46,54 +46,36 @@ def fetch_market_data(ticker="BTC-USD", period="2y", interval="1d"):
 # ==============================================================================
 def fetch_order_book_ccxt(symbol='BTC/USD', limit=100):
     """
-    NUEVA ESTRATEGIA: Usamos CoinGecko API (HTTP) en lugar de Exchanges directos.
-    CoinGecko es mucho más permisivo con IPs de Streamlit Cloud.
+    Intento final: API REST directa de Bitstamp (Suele funcionar en Cloud).
     """
     try:
-        # Petición HTTP a CoinGecko (Gratis, sin API Key requerida para uso bajo)
-        # ID de Bitcoin: bitcoin
-        url = "https://api.coingecko.com/api/v3/coins/bitcoin"
-        params = {
-            'tickers': 'false',
-            'market_data': 'false',
-            'community_data': 'false',
-            'developer_data': 'false',
-            'sparkline': 'false'
-        }
-        
-        # Primero intentamos obtener datos generales, pero para ORDER BOOK necesitamos exchanges específicos
-        # CoinGecko no da "Full Depth" gratis fácilmente.
-        # ASÍ QUE VAMOS A USAR BITSTAMP DIRECTO VÍA HTTP (No ccxt)
-        # Bitstamp REST API es muy abierta.
-        
-        response = requests.get("https://www.bitstamp.net/api/v2/order_book/btcusd/", timeout=5)
+        # Petición directa HTTP (como si fuera un navegador web)
+        url = "https://www.bitstamp.net/api/v2/order_book/btcusd/"
+        response = requests.get(url, timeout=5)
         data = response.json()
         
-        if 'bids' in data and 'asks' in data:
-            # Procesamos Bids
+        # Bitstamp devuelve timestamps, bids y asks
+        if 'bids' in data:
+            # Procesar Bids
             bids = pd.DataFrame(data['bids'], columns=['price', 'amount'])
-            bids['price'] = bids['price'].astype(float)
-            bids['amount'] = bids['amount'].astype(float)
+            bids = bids.astype(float) # Convertir texto a números
             bids['side'] = 'bid'
             
-            # Procesamos Asks
+            # Procesar Asks
             asks = pd.DataFrame(data['asks'], columns=['price', 'amount'])
-            asks['price'] = asks['price'].astype(float)
-            asks['amount'] = asks['amount'].astype(float)
+            asks = asks.astype(float)
             asks['side'] = 'ask'
             
-            df = pd.concat([bids.head(limit), asks.head(limit)]) # Tomamos los top X
+            # Unir y filtrar
+            df = pd.concat([bids.head(limit), asks.head(limit)])
             
-            # --- VALIDACIÓN DE ÉXITO ---
-            if not df.empty:
-                df['is_simulated'] = False # ¡DATOS REALES!
-                return df
-                
-        raise Exception("Bitstamp API vacía")
+            # MARCA DE AGUA: REAL
+            df['is_simulated'] = False
+            return df
 
     except Exception as e:
-        print(f"Error fetching real data: {e}")
-        # Si falla Bitstamp, probamos BLOCKCHAIN.COM (Otra API muy abierta)
+        print(f"Error Bitstamp: {e}")
+        # Si falla Bitstamp, probamos Blockchain.com (Plan B)
         try:
             r = requests.get("https://api.blockchain.com/v3/exchange/l2/BTC-USD", timeout=5)
             d = r.json()
@@ -101,18 +83,17 @@ def fetch_order_book_ccxt(symbol='BTC/USD', limit=100):
                 bids = pd.DataFrame(d['bids'], columns=['px', 'qty'])
                 bids.columns = ['price', 'amount']
                 bids['side'] = 'bid'
-                
                 asks = pd.DataFrame(d['asks'], columns=['px', 'qty'])
                 asks.columns = ['price', 'amount']
                 asks['side'] = 'ask'
-                
                 df = pd.concat([bids, asks])
                 df['is_simulated'] = False
                 return df
         except:
             pass
-            
-        return generate_mock_order_book()
+
+    # Si todo falla, simulación
+    return generate_mock_order_book()
 
 def generate_mock_order_book():
     """ Respaldo matemático final (Solo si no hay internet) """
