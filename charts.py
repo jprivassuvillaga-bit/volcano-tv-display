@@ -105,32 +105,88 @@ def create_price_volume_chart(df):
 # En charts.py
 
 def create_liquidity_heatmap(ob_df, current_price):
-    # ... (Validaciones de empty dataframe igual que antes) ...
+    """
+    Genera un Mapa de Densidad de Liquidez en Alta Definición (HD).
+    Incluye protección contra datos vacíos y alerta de simulación.
+    """
+    # --- SAFETY CHECK: EVITA PANTALLA BLANCA ---
+    # Si el dataframe está vacío o no tiene la columna precio, mostramos un gráfico de espera.
     if ob_df.empty or 'price' not in ob_df.columns:
-        return go.Figure().update_layout(title="Waiting for Data...")
+        fig = go.Figure()
+        fig.update_layout(
+            title="Waiting for Liquidity Data feed...",
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font=dict(color='#666'),
+            xaxis=dict(showgrid=False, showticklabels=False),
+            yaxis=dict(showgrid=False, showticklabels=False)
+        )
+        return fig
 
-    # --- DETECTOR DE SIMULACIÓN ---
-    # Verificamos si la columna existe y si hay algún valor True
+    # --- DETECTOR DE SIMULACIÓN (Marca de Agua) ---
+    # Verificamos si la columna 'is_simulated' existe y si hay algún valor True
     is_simulated = False
     if 'is_simulated' in ob_df.columns and ob_df['is_simulated'].any():
         is_simulated = True
 
-    # 1. Configuración de Zoom y Filtros (Igual que antes...)
+    # 1. Configuración de Zoom (Rango ajustado para ver detalle HD)
+    # Enfocamos la cámara al ±2% del precio actual
     range_mask = (ob_df['price'] > current_price * 0.98) & (ob_df['price'] < current_price * 1.02)
     df = ob_df[range_mask].copy()
-    if df.empty: df = ob_df.copy()
+    
+    # Si después del filtro no queda nada (ej: el precio se movió muy rápido),
+    # usamos el dataframe completo para asegurar que se vea algo.
+    if df.empty:
+        df = ob_df.copy()
 
-    # ... (Código de Binning y Groupby igual que antes) ...
-    # ... (Creación de bids y asks igual que antes) ...
+    # 2. "Binning" de Alta Resolución ($10 USD)
+    bin_size = 10 
+    df['price_bin'] = (df['price'] // bin_size) * bin_size
+    
+    # Agrupamos por precio y lado para sumar el volumen en cada nivel
+    df_grouped = df.groupby(['price_bin', 'side'])['amount'].sum().reset_index()
+    
+    bids = df_grouped[df_grouped['side']=='bid']
+    asks = df_grouped[df_grouped['side']=='ask']
     
     fig = go.Figure()
     
-    # ... (Add Traces de Bids y Asks igual que antes) ...
+    # 3. Dibujar Barras con Efecto Heatmap (Gradiente de Color)
     
-    # ... (Línea de precio actual igual que antes) ...
+    # BIDS (Compradores - Escala Matrix/Verde)
+    fig.add_trace(go.Bar(
+        y=bids['price_bin'], 
+        x=bids['amount'],
+        orientation='h',
+        name='Buy Density',
+        marker=dict(
+            color=bids['amount'], # El brillo depende del tamaño del muro
+            colorscale=[[0, '#004d1a'], [1, '#00ff41']], # De oscuro a Neón
+            line=dict(width=0)
+        ),
+        hovertemplate='BID<br>Price: $%{y:,.0f}<br>Vol: %{x:.2f} BTC'
+    ))
+    
+    # ASKS (Vendedores - Escala Lava/Rojo)
+    fig.add_trace(go.Bar(
+        y=asks['price_bin'], 
+        x=asks['amount'],
+        orientation='h',
+        name='Sell Density',
+        marker=dict(
+            color=asks['amount'], 
+            colorscale=[[0, '#4d0000'], [1, '#ff0000']], # De oscuro a Fuego
+            line=dict(width=0)
+        ),
+        hovertemplate='ASK<br>Price: $%{y:,.0f}<br>Vol: %{x:.2f} BTC'
+    ))
+    
+    # Línea de Precio Actual (Referencia visual)
+    fig.add_hline(y=current_price, line_dash="dash", line_color="white", opacity=0.5, annotation_text="SPOT")
 
-    # 4. Styling CON ALERTA
-    # Definimos el título dinámicamente
+    # 4. Styling y Alertas Visuales
+    
+    # Definimos el título dinámicamente según la integridad de los datos
     if is_simulated:
         main_title = "⚠️ LIQUIDITY MAP (SIMULATION MODE - CONNECTION LOST)"
         title_color = "#FF4B4B" # Rojo Alerta
@@ -141,11 +197,27 @@ def create_liquidity_heatmap(ob_df, current_price):
     fig.update_layout(
         title=dict(
             text=main_title,
-            font=dict(color=title_color) # Cambia el color del título si es falso
+            font=dict(color=title_color)
         ),
         xaxis_title="Volume Density (BTC)",
-        # ... Resto del layout igual ...
+        yaxis_title="Price Level (USD)",
+        height=550,
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='#e0e0e0', size=10),
+        barmode='overlay', 
+        bargap=0.05, # Pequeño espacio para distinguir niveles
+        showlegend=False,
+        yaxis=dict(
+            # Zoom inteligente: forzamos el rango visible
+            range=[current_price*0.99, current_price*1.01],
+            gridcolor='rgba(255,255,255,0.05)', # Grid muy sutil
+            tickformat=",.0f" # Precios sin decimales
+        )
     )
+    
+    # Quitamos el grid vertical para limpieza visual
+    fig.update_xaxes(showgrid=False, zeroline=False)
     
     return fig
 
