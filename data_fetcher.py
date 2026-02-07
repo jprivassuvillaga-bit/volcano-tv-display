@@ -65,63 +65,50 @@ def fetch_market_data(ticker="BTC-USD", period="2y", interval="1d"):
 
 def fetch_order_book_ccxt(symbol='BTC/USD', limit=500):
     """
-    Intenta Kraken -> Coinbase -> Bitstamp -> Mock Data.
-    AGREGADO: Etiqueta 'is_simulated' = False para datos reales.
+    Intenta descargar el Order Book en cascada: Kraken -> Coinbase -> Bitstamp.
+    Si alguno funciona, marca los datos como REALES.
+    Si todos fallan, devuelve datos SIMULADOS.
     """
     try:
-        # ... (Tus intentos de conexión KRAKEN / COINBASE igual que antes) ...
-        # (Aquí iría el bloque try/except de conexión que ya tienes)
-        # SUPONGAMOS QUE CONECTÓ Y TENEMOS 'order_book':
+        # --- INICIO DE LA CASCADA DE INTENTOS ---
         
-        # ... Código de conexión ...
-        # Ejemplo resumido de donde obtienes el df real:
-        exchange = ccxt.kraken() # (O el que funcione)
-        order_book = exchange.fetch_order_book('BTC/USD', limit=limit)
+        # 1. INTENTO KRAKEN
+        try:
+            exchange = ccxt.kraken()
+            order_book = exchange.fetch_order_book('BTC/USD', limit=limit)
+        except Exception:
+            # 2. SI FALLA KRAKEN -> INTENTO COINBASE
+            try:
+                exchange = ccxt.coinbase()
+                # Nota: Coinbase usa guión 'BTC-USD'
+                order_book = exchange.fetch_order_book('BTC-USD', limit=limit)
+            except Exception:
+                # 3. SI FALLA COINBASE -> INTENTO BITSTAMP
+                # Bitstamp suele ser muy amigable con IPs de servidores
+                exchange = ccxt.bitstamp()
+                order_book = exchange.fetch_order_book('BTC/USD', limit=limit)
+
+        # --- SI LLEGAMOS AQUÍ, ALGUNO DE LOS 3 FUNCIONÓ ---
         
+        # Procesamos los datos (Bids y Asks)
         bids = pd.DataFrame(order_book['bids'], columns=['price', 'amount'])
         bids['side'] = 'bid'
+        
         asks = pd.DataFrame(order_book['asks'], columns=['price', 'amount'])
         asks['side'] = 'ask'
+        
         df = pd.concat([bids, asks])
         
         # --- MARCA DE AGUA: REAL ---
-        df['is_simulated'] = False  # <--- AGREGA ESTO
+        # Esto es lo que le dice al gráfico "No muestres la alerta roja"
+        df['is_simulated'] = False 
         
         return df
 
     except Exception as e:
-        print(f"API Error ({e}). Generando respaldo...")
+        # SI FALLARON LOS 3 EXCHANGES (Bloqueo total de IP)
+        print(f"Todos los exchanges fallaron ({e}). Generando respaldo...")
         return generate_mock_order_book()
-
-def generate_mock_order_book():
-    """
-    Genera datos simulados.
-    AGREGADO: Etiqueta 'is_simulated' = True.
-    """
-    # ... (Tu código de generación de precios base y dataframes) ...
-    # (El código que busca el precio real y genera bids_df y asks_df)
-    
-    # Al final, antes de concatenar:
-    try:
-        ticker = yf.Ticker("BTC-USD")
-        base_price = ticker.fast_info['last_price']
-    except:
-        base_price = 96000
-
-    bids_prices = [base_price * (1 - i/1000) for i in range(1, 200)]
-    bids_amts = [np.random.uniform(0.1, 5.0) + (5 if i % 40 == 0 else 0) for i in range(1, 200)]
-    bids_df = pd.DataFrame({'price': bids_prices, 'amount': bids_amts, 'side': 'bid'})
-    
-    asks_prices = [base_price * (1 + i/1000) for i in range(1, 200)]
-    asks_amts = [np.random.uniform(0.1, 5.0) + (5 if i % 40 == 0 else 0) for i in range(1, 200)]
-    asks_df = pd.DataFrame({'price': asks_prices, 'amount': asks_amts, 'side': 'ask'})
-    
-    df = pd.concat([bids_df, asks_df])
-    
-    # --- MARCA DE AGUA: SIMULADO ---
-    df['is_simulated'] = True # <--- AGREGA ESTO
-    
-    return df
 
 # ==============================================================================
 # --- 3. ETF DATA ---
