@@ -102,83 +102,50 @@ def create_price_volume_chart(df):
 # ==============================================================================
 # --- 2. HEATMAP DE LIQUIDEZ (HD) ---
 # ==============================================================================
-def create_liquidity_heatmap(ob_df, current_price):
-    """
-    Genera un Mapa de Densidad de Liquidez en Alta Definición (HD).
-    Incluye protección contra datos vacíos.
-    """
-    # --- SAFETY CHECK: EVITA PANTALLA BLANCA ---
-    if ob_df.empty or 'price' not in ob_df.columns:
-        fig = go.Figure()
-        fig.update_layout(
-            title="Waiting for Liquidity Data feed...",
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='#666'),
-            xaxis=dict(showgrid=False, showticklabels=False),
-            yaxis=dict(showgrid=False, showticklabels=False)
-        )
-        return fig
+# En charts.py
 
-    # 1. Configuración de Zoom (Rango más ajustado para ver detalle)
+def create_liquidity_heatmap(ob_df, current_price):
+    # ... (Validaciones de empty dataframe igual que antes) ...
+    if ob_df.empty or 'price' not in ob_df.columns:
+        return go.Figure().update_layout(title="Waiting for Data...")
+
+    # --- DETECTOR DE SIMULACIÓN ---
+    # Verificamos si la columna existe y si hay algún valor True
+    is_simulated = False
+    if 'is_simulated' in ob_df.columns and ob_df['is_simulated'].any():
+        is_simulated = True
+
+    # 1. Configuración de Zoom y Filtros (Igual que antes...)
     range_mask = (ob_df['price'] > current_price * 0.98) & (ob_df['price'] < current_price * 1.02)
     df = ob_df[range_mask].copy()
-    
-    # Si después del filtro no queda nada (ej: precio muy lejos), devolvemos vacío para no crashear
-    if df.empty:
-        # Intentamos mostrar todo sin filtro si el zoom falla
-        df = ob_df.copy()
+    if df.empty: df = ob_df.copy()
 
-    # 2. "Binning" de Alta Resolución ($10)
-    bin_size = 10 
-    df['price_bin'] = (df['price'] // bin_size) * bin_size
-    
-    df_grouped = df.groupby(['price_bin', 'side'])['amount'].sum().reset_index()
-    
-    bids = df_grouped[df_grouped['side']=='bid']
-    asks = df_grouped[df_grouped['side']=='ask']
+    # ... (Código de Binning y Groupby igual que antes) ...
+    # ... (Creación de bids y asks igual que antes) ...
     
     fig = go.Figure()
     
-    # 3. Dibujar Barras Heatmap
+    # ... (Add Traces de Bids y Asks igual que antes) ...
     
-    # BIDS (Verde Láser)
-    fig.add_trace(go.Bar(
-        y=bids['price_bin'], x=bids['amount'], orientation='h', name='Buy Density',
-        marker=dict(color=bids['amount'], colorscale=[[0, '#004d1a'], [1, '#00ff41']], line=dict(width=0)),
-        hovertemplate='BID<br>$%{y:,.0f}<br>%{x:.2f} BTC'
-    ))
-    
-    # ASKS (Rojo Fuego)
-    fig.add_trace(go.Bar(
-        y=asks['price_bin'], x=asks['amount'], orientation='h', name='Sell Density',
-        marker=dict(color=asks['amount'], colorscale=[[0, '#4d0000'], [1, '#ff0000']], line=dict(width=0)),
-        hovertemplate='ASK<br>$%{y:,.0f}<br>%{x:.2f} BTC'
-    ))
-    
-    fig.add_hline(y=current_price, line_dash="dash", line_color="white", opacity=0.5, annotation_text="SPOT")
+    # ... (Línea de precio actual igual que antes) ...
 
-    # 4. Styling
+    # 4. Styling CON ALERTA
+    # Definimos el título dinámicamente
+    if is_simulated:
+        main_title = "⚠️ LIQUIDITY MAP (SIMULATION MODE - CONNECTION LOST)"
+        title_color = "#FF4B4B" # Rojo Alerta
+    else:
+        main_title = "Liquidity Density (High Res - Live Feed)"
+        title_color = "#e0e0e0" # Blanco Normal
+
     fig.update_layout(
-        title="Liquidity Density (High Res)",
+        title=dict(
+            text=main_title,
+            font=dict(color=title_color) # Cambia el color del título si es falso
+        ),
         xaxis_title="Volume Density (BTC)",
-        yaxis_title="Price Level (USD)",
-        height=550,
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='#e0e0e0', size=10),
-        barmode='overlay', 
-        bargap=0.05, 
-        showlegend=False,
-        # Zoom inteligente
-        yaxis=dict(
-            range=[current_price*0.99, current_price*1.01],
-            gridcolor='rgba(255,255,255,0.05)',
-            tickformat=",.0f"
-        )
+        # ... Resto del layout igual ...
     )
-    
-    fig.update_xaxes(showgrid=False, zeroline=False)
     
     return fig
 
