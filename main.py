@@ -238,62 +238,82 @@ elif st.session_state.page_index == 1:
             st.info("Loading Macro Data...")
 
 
-# --- VISTA 3: SIMULATOR & FORECAST (45s-60s) ---
-# ** HIGH CONTRAST MODE **
+# --- VISTA 3: INSTITUTIONAL CREDIT SIMULATOR (SOLO SIMULACIÓN) ---
+# ** HIGH CONTRAST MODE (FULL SCREEN) **
 elif st.session_state.page_index == 2:
     
-    # Activamos Alto Contraste
+    # Activamos Alto Contraste (Letras Blancas y Brillantes)
     st.markdown('<div class="tv-high-contrast">', unsafe_allow_html=True)
     
-    st.subheader("🔮 AI Forecast & Risk Simulation")
+    st.subheader("🛡️ Live Credit Stress Test (Institutional)")
     
-    c_sim_left, c_sim_right = st.columns([2, 1])
+    # --- 1. PARÁMETROS DEL ESCENARIO (Fijos para TV) ---
+    SIM_LOAN = 5_000_000   # $5 Millones (Ejemplo Institucional)
+    SIM_HAIRCUT = 30       # 30% Haircut
+    SIM_LTV = 0.65         # 65% LTV Inicial
+    SIM_LIQ_THRESH = 0.85  # 85% Umbral de Liquidación
     
-    # IZQUIERDA: GRÁFICO (Forecast o Fallback)
-    with c_sim_left:
-        if forecast_df is not None:
-            st.plotly_chart(charts.create_forecast_chart(market_df, forecast_df), use_container_width=True)
-        else:
-            # Fallback si Prophet no está instalado
-            st.plotly_chart(charts.create_onchain_chart(market_df), use_container_width=True)
-            if not HAS_PROPHET:
-                st.caption("ℹ️ AI Model module not loaded. Showing On-Chain Valuation.")
+    # --- 2. CÁLCULO "DOUBLE SHIELD" (Tu Lógica) ---
+    # A. Precio que el banco reconoce (Lending Value)
+    lending_price = curr['close'] * (1 - (SIM_HAIRCUT / 100))
+    
+    # B. Colateral Requerido (Basado en Lending Price)
+    collateral_btc = SIM_LOAN / (lending_price * SIM_LTV)
+    collateral_usd_market = collateral_btc * curr['close']
+    
+    # C. Precio de Liquidación
+    # Deuda = (BTC * Liq_Price * (1-Haircut)) * Threshold
+    liq_price = SIM_LOAN / (collateral_btc * (1 - SIM_HAIRCUT/100) * SIM_LIQ_THRESH)
+    
+    # D. Buffer de Seguridad
+    buffer_pct = (curr['close'] - liq_price) / curr['close']
+    
+    # --- 3. DISEÑO VISUAL (3 COLUMNAS GRANDES) ---
+    c1, c2, c3 = st.columns([1, 1, 1])
+    
+    # COLUMNA 1: ESTRUCTURA DEL TRATO
+    with c1:
+        st.markdown("#### 💼 Deal Structure")
+        st.metric("Principal", f"${SIM_LOAN/1_000_000:.1f}M", "USD")
+        st.metric("Haircut Applied", f"{SIM_HAIRCUT}%", f"Adj. Price: ${lending_price:,.0f}")
+        st.metric("Effective LTV", f"{SIM_LTV:.0%}", "Risk Policy")
 
-    # DERECHA: SIMULACIÓN EN VIVO (Double Shield Logic)
-    with c_sim_right:
-        # Definimos escenario estándar para TV
-        SIM_LOAN = 1_000_000   # 1M Prestamo
-        SIM_HAIRCUT = 30       # 30% Haircut
-        SIM_LTV_REQ = 0.65     # 65% LTV
+    # COLUMNA 2: REQUERIMIENTOS DE COLATERAL (EL NÚMERO IMPORTANTE)
+    with c2:
+        st.markdown("#### 🔐 Collateral Required")
+        # Mostramos BTC en gigante
+        st.markdown(f"""
+        <div style="font-size: 50px; font-weight: bold; color: #F59E0B; line-height: 1.2;">
+            {collateral_btc:.2f} BTC
+        </div>
+        """, unsafe_allow_html=True)
         
-        # --- CÁLCULO DOUBLE SHIELD ---
-        # 1. Precio que el banco "ve"
-        lending_price = curr['close'] * (1 - (SIM_HAIRCUT / 100))
+        st.metric("Market Value", f"${collateral_usd_market:,.0f}", "100% Value")
         
-        # 2. Colateral necesario
-        collateral_btc = SIM_LOAN / (lending_price * SIM_LTV_REQ)
-        
-        # 3. Target AI (Última predicción)
-        if forecast_df is not None:
-            target_price = forecast_df.iloc[-1]['yhat']
-            trend_pct = (target_price - curr['close']) / curr['close']
-            trend_str = f"{trend_pct:+.1%}"
-        else:
-            target_price = 0
-            trend_str = "N/A"
+        # Barra de progreso visual: Cuánto del colateral es "reconocido" vs "recorte"
+        st.caption(f"Bank Recognition Rate: {100-SIM_HAIRCUT}%")
+        st.progress(1.0 - (SIM_HAIRCUT/100))
 
-        # --- VISUALIZACIÓN HIGH CONTRAST ---
-        st.markdown("#### 🎯 AI 30-Day Target")
-        st.metric("Predicted Price", f"${target_price:,.0f}", trend_str)
+    # COLUMNA 3: ANÁLISIS DE RIESGO (LIQUIDACIÓN)
+    with c3:
+        st.markdown("#### 📉 Risk Thresholds")
         
-        st.markdown("---")
+        liq_color = "#FF4B4B" if buffer_pct < 0.15 else "#10B981"
         
-        st.markdown("#### 🛡️ Live Stress Test")
-        st.caption(f"Scenario: Loan $1M | Haircut {SIM_HAIRCUT}%")
+        st.metric("Liquidation Price", f"${liq_price:,.0f}", f"Threshold: {SIM_LIQ_THRESH:.0%}")
         
-        st.metric("Collateral Req.", f"{collateral_btc:.2f} BTC", f"Market Val: ${collateral_btc * curr['close']:,.0f}")
+        st.markdown(f"""
+        <div style="margin-top: 10px;">
+            <div style="font-size: 16px; color: #aaa;">SAFETY BUFFER</div>
+            <div style="font-size: 40px; font-weight: bold; color: {liq_color};">
+                {buffer_pct:.2%}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
         
-        # Simulación de un "Check" de seguridad
-        st.success("✅ RISK CHECK PASSED")
+        if buffer_pct > 0.20:
+            st.success("✅ LOW RISK SCENARIO")
+        else:
+            st.warning("⚠️ MODERATE RISK")
 
     st.markdown('</div>', unsafe_allow_html=True)
