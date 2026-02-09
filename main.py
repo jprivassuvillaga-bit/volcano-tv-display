@@ -173,9 +173,20 @@ if st.session_state.page_index == 0:
                 st.markdown(f"<span style='color:{color_rvol}; font-size:24px; font-weight:bold'>{rvol:.2f}x</span> <span style='font-size:12px'>Vol</span>", unsafe_allow_html=True)
 
         st.markdown("---")
-        if not macro_df.empty:
-             corr_sp = macro_df.pct_change().corr()['Bitcoin']['S&P 500']
-             st.metric("S&P 500 Corr", f"{corr_sp:.2f}")
+        
+        # --- BLOQUE PROTEGIDO DE CORRELACIÓN ---
+        if not macro_df.empty and 'Bitcoin' in macro_df.columns and 'S&P 500' in macro_df.columns:
+             try:
+                 # Calculamos correlación solo si tenemos los datos
+                 corr_sp = macro_df.pct_change().corr()['Bitcoin']['S&P 500']
+                 st.metric("S&P 500 Corr", f"{corr_sp:.2f}")
+             except Exception:
+                 st.metric("S&P 500 Corr", "N/A")
+        else:
+             # Si no hay datos macro, mostramos un guión en vez de romper la app
+             st.metric("S&P 500 Corr", "-")
+
+    c1, c2 = st.columns(2)
 
     c1, c2 = st.columns(2)
     with c1: st.plotly_chart(charts.create_volatility_chart(market_df), use_container_width=True)
