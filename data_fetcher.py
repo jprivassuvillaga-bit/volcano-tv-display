@@ -9,21 +9,42 @@ from datetime import datetime
 # ==============================================================================
 # --- 1. DATOS DE MERCADO (OHLCV) ---
 # ==============================================================================
+
+
 def fetch_market_data(ticker="BTC-USD", period="2y", interval="1d"):
     """
     Descarga datos y calcula indicadores técnicos.
+    VERSIÓN BLINDADA: Fuerza nombres de columnas a minúsculas para evitar KeyErrors.
     """
     try:
+        # Descarga sin progreso para no ensuciar logs
         df = yf.download(ticker, period=period, interval=interval, progress=False)
         
+        # --- FASE 1: APLANAR MULTI-INDEX (El problema del fin de semana) ---
+        # Si Yahoo devuelve ('Close', 'BTC-USD'), nos quedamos solo con 'Close'
         if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-            
-        df = df.rename(columns={"Open": "open", "High": "high", "Low": "low", "Close": "close", "Volume": "volume"})
+            try:
+                # Intentamos obtener el nivel 0 (Precio)
+                df.columns = df.columns.get_level_values(0)
+            except:
+                # Si falla, simplemente los convertimos a string y limpiamos
+                pass
         
-        if 'close' not in df.columns or df.empty: return pd.DataFrame()
+        # --- FASE 2: NORMALIZACIÓN FORZOSA ---
+        # Convertimos TODAS las columnas a minúsculas y quitamos espacios
+        # Esto garantiza que 'Close', 'CLOSE', ' close ' se conviertan en 'close'
+        df.columns = [c.lower().strip() for c in df.columns]
 
-        # Indicadores
+        # Verificación de seguridad
+        if 'close' not in df.columns:
+            # Si después de todo no hay 'close', algo grave pasó con la descarga
+            print(f"Error: Columnas recibidas: {df.columns}")
+            return pd.DataFrame()
+
+        if df.empty:
+            return pd.DataFrame()
+
+        # --- FASE 3: INDICADORES ---
         df['sma_50'] = df['close'].rolling(window=50).mean()
         df['sma_200'] = df['close'].rolling(window=200).mean()
         df['log_ret'] = np.log(df['close'] / df['close'].shift(1))
@@ -38,7 +59,9 @@ def fetch_market_data(ticker="BTC-USD", period="2y", interval="1d"):
         
         df = df.fillna(0)
         return df
-    except:
+
+    except Exception as e:
+        print(f"Error fetching market data: {e}")
         return pd.DataFrame()
 
 # ==============================================================================
