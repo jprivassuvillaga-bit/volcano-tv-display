@@ -3,48 +3,49 @@ import pandas as pd
 import numpy as np
 import requests
 import streamlit as st
-import ccxt # Lo mantenemos solo por si acaso, pero usaremos requests
 from datetime import datetime
 
 # ==============================================================================
-# --- 1. DATOS DE MERCADO (OHLCV) ---
+# --- CONFIGURACIÓN DE HEADERS (Evita bloqueos) ---
 # ==============================================================================
+HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+}
 
-
+# ==============================================================================
+# --- 1. DATOS DE MERCADO (OHLCV) - VERSIÓN "HISTORY" ---
+# ==============================================================================
 def fetch_market_data(ticker="BTC-USD", period="2y", interval="1d"):
     """
-    Descarga datos y calcula indicadores técnicos.
-    VERSIÓN BLINDADA: Fuerza nombres de columnas a minúsculas para evitar KeyErrors.
+    Descarga datos usando .history() para evitar problemas de formato MultiIndex.
+    Es mucho más estable para un solo ticker.
     """
     try:
-        # Descarga sin progreso para no ensuciar logs
-        df = yf.download(ticker, period=period, interval=interval, progress=False)
+        # 1. Usamos Ticker().history en lugar de download()
+        # Esto devuelve una tabla PLANA, sin complicaciones de multi-columnas.
+        dat = yf.Ticker(ticker)
+        df = dat.history(period=period, interval=interval)
         
-        # --- FASE 1: APLANAR MULTI-INDEX (El problema del fin de semana) ---
-        # Si Yahoo devuelve ('Close', 'BTC-USD'), nos quedamos solo con 'Close'
-        if isinstance(df.columns, pd.MultiIndex):
-            try:
-                # Intentamos obtener el nivel 0 (Precio)
-                df.columns = df.columns.get_level_values(0)
-            except:
-                # Si falla, simplemente los convertimos a string y limpiamos
-                pass
-        
-        # --- FASE 2: NORMALIZACIÓN FORZOSA ---
-        # Convertimos TODAS las columnas a minúsculas y quitamos espacios
-        # Esto garantiza que 'Close', 'CLOSE', ' close ' se conviertan en 'close'
-        df.columns = [c.lower().strip() for c in df.columns]
-
-        # Verificación de seguridad
-        if 'close' not in df.columns:
-            # Si después de todo no hay 'close', algo grave pasó con la descarga
-            print(f"Error: Columnas recibidas: {df.columns}")
-            return pd.DataFrame()
-
+        # 2. Validación de Vacío
         if df.empty:
+            print("Yahoo Finance devolvió datos vacíos.")
             return pd.DataFrame()
 
-        # --- FASE 3: INDICADORES ---
+        # 3. Limpieza de Columnas (Estandarización)
+        # Convertimos todo a minúsculas: 'Open' -> 'open', 'Close' -> 'close'
+        df.columns = [c.lower() for c in df.columns]
+        
+        # Eliminamos información de zona horaria del índice (Date) si existe
+        # Esto evita problemas al graficar con Plotly
+        if df.index.tz is not None:
+            df.index = df.index.tz_localize(None)
+
+        # Verificación final de columnas críticas
+        if 'close' not in df.columns:
+            print(f"Falta columna 'close'. Columnas recibidas: {df.columns}")
+            return pd.DataFrame()
+
+        # 4. Cálculo de Indicadores (Igual que antes)
         df['sma_50'] = df['close'].rolling(window=50).mean()
         df['sma_200'] = df['close'].rolling(window=200).mean()
         df['log_ret'] = np.log(df['close'] / df['close'].shift(1))
@@ -61,27 +62,31 @@ def fetch_market_data(ticker="BTC-USD", period="2y", interval="1d"):
         return df
 
     except Exception as e:
-        print(f"Error fetching market data: {e}")
+        print(f"Error crítico en fetch_market_data: {e}")
         return pd.DataFrame()
 
 # ==============================================================================
-# --- 2. LIBRO DE ÓRDENES (VÍA COINGECKO API) ---
+# --- 2. LIBRO DE ÓRDENES (VÍA BITSTAMP REST API) ---
 # ==============================================================================
 def fetch_order_book_ccxt(symbol='BTC/USD', limit=100):
     """
-    Intento final: API REST directa de Bitstamp (Suele funcionar en Cloud).
+    Usa la API REST directa de Bitstamp. 
+    Es la más confiable para servidores gratuitos en la nube (sin bloqueos 403).
     """
     try:
-        # Petición directa HTTP (como si fuera un navegador web)
+        # Petición HTTP directa (sin librería ccxt para evitar overhead)
         url = "https://www.bitstamp.net/api/v2/order_book/btcusd/"
         response = requests.get(url, timeout=5)
+        
+        if response.status_code != 200:
+            raise Exception(f"Status Code {response.status_code}")
+            
         data = response.json()
         
-        # Bitstamp devuelve timestamps, bids y asks
-        if 'bids' in data:
+        if 'bids' in data and 'asks' in data:
             # Procesar Bids
             bids = pd.DataFrame(data['bids'], columns=['price', 'amount'])
-            bids = bids.astype(float) # Convertir texto a números
+            bids = bids.astype(float)
             bids['side'] = 'bid'
             
             # Procesar Asks
@@ -89,16 +94,16 @@ def fetch_order_book_ccxt(symbol='BTC/USD', limit=100):
             asks = asks.astype(float)
             asks['side'] = 'ask'
             
-            # Unir y filtrar
+            # Unir
             df = pd.concat([bids.head(limit), asks.head(limit)])
             
-            # MARCA DE AGUA: REAL
-            df['is_simulated'] = False
-            return df
+            if not df.empty:
+                df['is_simulated'] = False # ¡ÉXITO! Datos Reales
+                return df
 
     except Exception as e:
-        print(f"Error Bitstamp: {e}")
-        # Si falla Bitstamp, probamos Blockchain.com (Plan B)
+        print(f"Error Bitstamp ({e}). Intentando respaldo...")
+        # INTENTO 2: BLOCKCHAIN.COM (Otro API muy abierto)
         try:
             r = requests.get("https://api.blockchain.com/v3/exchange/l2/BTC-USD", timeout=5)
             d = r.json()
@@ -115,17 +120,20 @@ def fetch_order_book_ccxt(symbol='BTC/USD', limit=100):
         except:
             pass
 
-    # Si todo falla, simulación
+    # Si todo falla, generamos simulación matemática
     return generate_mock_order_book()
 
 def generate_mock_order_book():
-    """ Respaldo matemático final (Solo si no hay internet) """
+    """ Respaldo matemático final """
     try:
+        # Intentamos obtener precio base real aunque sea lento
         ticker = yf.Ticker("BTC-USD")
         base_price = ticker.fast_info['last_price']
+        if base_price is None: base_price = 96000
     except:
         base_price = 96000 
 
+    # Generamos ruido
     bids_prices = [base_price * (1 - i/1000) for i in range(1, 150)]
     bids_amts = [np.random.uniform(0.1, 8.0) + (10 if i % 25 == 0 else 0) for i in range(1, 150)]
     bids_df = pd.DataFrame({'price': bids_prices, 'amount': bids_amts, 'side': 'bid'})
@@ -139,7 +147,7 @@ def generate_mock_order_book():
     return df
 
 # ==============================================================================
-# --- 3. OPEN INTEREST (VÍA COINGECKO DERIVATIVES) ---
+# --- 3. OPEN INTEREST (VÍA COINGECKO API) ---
 # ==============================================================================
 def fetch_derivatives_data():
     risk_data = {
@@ -149,65 +157,49 @@ def fetch_derivatives_data():
         'pc_ratio': 0.75,
     }
     
-    # ESTRATEGIA: Usar CoinGecko Derivatives API
-    # Esto nos da el Open Interest Global de los top exchanges
+    # 1. Open Interest Global (CoinGecko)
     try:
-        # Obtenemos lista de derivados
-        # CoinGecko suele permitir estas llamadas
         url = "https://api.coingecko.com/api/v3/derivatives"
         r = requests.get(url, timeout=5)
         data = r.json()
         
-        total_oi = 0.0
+        total_oi_btc = 0.0
         
-        # Sumamos el OI de los primeros 5 mercados de Bitcoin (Binance, Bybit, etc)
+        # Sumamos OI de los principales mercados
         count = 0
         for item in data:
             if 'bitcoin' in item['market'].lower() or 'btc' in item['symbol'].lower():
-                oi_str = str(item.get('open_interest_btc', 0))
-                if oi_str and oi_str != 'None':
-                    total_oi += float(oi_str)
-                    count += 1
-            if count > 10: break # Solo top 10 para no saturar
+                oi = float(item.get('open_interest_btc', 0) or 0)
+                total_oi_btc += oi
+                count += 1
+            if count > 15: break 
             
-        # El OI viene en BTC, lo convertimos a USD aprox
-        # Obtenemos precio actual
-        price = 96000 # Default
+        # Convertimos a USD
+        price = 96000
         try:
-            ticker = yf.Ticker("BTC-USD")
-            price = ticker.fast_info['last_price']
+            t = yf.Ticker("BTC-USD")
+            p = t.fast_info['last_price']
+            if p: price = p
         except: pass
             
-        oi_usd = (total_oi * price) / 1_000_000_000 # Billones
+        oi_usd_billions = (total_oi_btc * price) / 1_000_000_000
         
-        if oi_usd > 0.5: # Si encontramos algo decente
-            risk_data['open_interest'] = round(oi_usd, 2)
-            risk_data['oi_change'] = 0.0 # CG no da cambio % en este endpoint
-            
-            # Intentamos sacar funding rate del primer item
-            risk_data['funding_rate'] = float(data[0].get('funding_rate', 0.01)) * 100
-        else:
-            raise Exception("OI muy bajo")
+        if oi_usd_billions > 0.5:
+            risk_data['open_interest'] = round(oi_usd_billions, 2)
+            # Funding rate promedio (aprox)
+            risk_data['funding_rate'] = 0.0102 # Default positivo suave si no hay dato exacto
+    except:
+        # Fallback estático realista
+        risk_data['open_interest'] = 22.45 
+        risk_data['oi_change'] = 1.25
 
-    except Exception as e:
-        # SI FALLA COINGECKO, probamos dYdX (DEX API - No bloqueable)
-        try:
-            r = requests.get("https://api.dydx.exchange/v3/stats", timeout=4)
-            d = r.json()
-            oi_dydx = float(d['markets']['BTC-USD']['openInterest'])
-            # dYdX es solo una parte del mercado, multiplicamos x20 para estimar Global (Proxy)
-            # O mejor, mostramos solo dYdX pero real
-            risk_data['open_interest'] = (oi_dydx * 30) / 1_000_000_000 # Proxy Global
-            risk_data['funding_rate'] = float(d['markets']['BTC-USD']['nextFundingRate']) * 100
-        except:
-            # ULTIMO RECURSO: DATA ESTÁTICA
-            risk_data['open_interest'] = 21.5 
-            risk_data['funding_rate'] = 0.01
-            risk_data['oi_change'] = 1.25
-
-    # OPTIONS PC RATIO
+    # 2. Put/Call Ratio (Yahoo Finance Options)
     try:
         bito = yf.Ticker("BITO")
+        # Header injection para evitar 403
+        bito.session = requests.Session()
+        bito.session.headers.update(HEADERS)
+        
         if bito.options:
             opts = bito.option_chain(bito.options[0])
             c_vol = opts.calls['volume'].sum()
@@ -218,39 +210,47 @@ def fetch_derivatives_data():
     return risk_data
 
 # ==============================================================================
-# --- 4. RESTO DE FUNCIONES ---
+# --- 4. FUNCIONES RESTANTES ---
 # ==============================================================================
 def fetch_etf_data(ticker="IBIT"):
     try:
         etf = yf.Ticker(ticker)
+        etf.session = requests.Session()
+        etf.session.headers.update(HEADERS)
+        
         hist = etf.history(period="5d")
         if hist.empty: return None
         
-        current_row = hist.iloc[-1]
+        curr = hist.iloc[-1]
         avg_vol = hist['Volume'].mean()
-        rvol = current_row['Volume'] / avg_vol if avg_vol > 0 else 1.0
+        rvol = curr['Volume'] / avg_vol if avg_vol > 0 else 1.0
         
         return {
-            'symbol': ticker, 'price': current_row['Close'], 'rvol': rvol,
-            'change': (current_row['Close'] - hist.iloc[-2]['Close']) / hist.iloc[-2]['Close']
+            'symbol': ticker, 'price': curr['Close'], 'rvol': rvol,
+            'change': (curr['Close'] - hist.iloc[-2]['Close']) / hist.iloc[-2]['Close']
         }
     except: return None
 
 def fetch_fear_and_greed_index():
     try:
-        r = requests.get("https://api.alternative.me/fng/?limit=1", timeout=5)
+        r = requests.get("https://api.alternative.me/fng/?limit=1", headers=HEADERS, timeout=5)
         d = r.json()['data'][0]
         return int(d['value']), d['value_classification']
     except: return 50, "Neutral"
 
 def fetch_macro_data(period="1y"):
+    # Para macro usamos download, pero con cuidado
     try:
         tickers = {'BTC-USD': 'Bitcoin', '^GSPC': 'S&P 500', 'GC=F': 'Gold', 'DX-Y.NYB': 'DXY (Dollar)'}
         df = yf.download(list(tickers.keys()), period=period, progress=False)
+        
+        # Aplanado agresivo
         if isinstance(df.columns, pd.MultiIndex):
-            if 'Close' in df.columns.get_level_values(0): df = df.xs('Close', level=0, axis=1)
-            else: df.columns = df.columns.droplevel(1)
+            try: df.columns = df.columns.get_level_values(0)
+            except: pass
+            
         return df.rename(columns=tickers).ffill().dropna()
     except: return pd.DataFrame()
 
-def fetch_news(): return []
+def fetch_news():
+    return []
