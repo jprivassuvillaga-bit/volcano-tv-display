@@ -102,48 +102,29 @@ def create_price_volume_chart(df):
 # ==============================================================================
 # --- 2. HEATMAP DE LIQUIDEZ (HD) ---
 # ==============================================================================
-# En charts.py
 
 def create_liquidity_heatmap(ob_df, current_price):
     """
     Genera un Mapa de Densidad de Liquidez en Alta Definición (HD).
-    Incluye protección contra datos vacíos y alerta de simulación.
     """
-    # --- SAFETY CHECK: EVITA PANTALLA BLANCA ---
-    # Si el dataframe está vacío o no tiene la columna precio, mostramos un gráfico de espera.
     if ob_df.empty or 'price' not in ob_df.columns:
         fig = go.Figure()
-        fig.update_layout(
-            title="Waiting for Liquidity Data feed...",
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font=dict(color='#666'),
-            xaxis=dict(showgrid=False, showticklabels=False),
-            yaxis=dict(showgrid=False, showticklabels=False)
-        )
+        fig.update_layout(title="Waiting for Liquidity Data feed...", paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#666'), xaxis=dict(showgrid=False, showticklabels=False), yaxis=dict(showgrid=False, showticklabels=False))
         return fig
 
-    # --- DETECTOR DE SIMULACIÓN (Marca de Agua) ---
-    # Verificamos si la columna 'is_simulated' existe y si hay algún valor True
+    # DETECTOR DE SIMULACIÓN
     is_simulated = False
     if 'is_simulated' in ob_df.columns and ob_df['is_simulated'].any():
         is_simulated = True
 
-    # 1. Configuración de Zoom (Rango ajustado para ver detalle HD)
-    # Enfocamos la cámara al ±2% del precio actual
+    # Zoom ±2%
     range_mask = (ob_df['price'] > current_price * 0.98) & (ob_df['price'] < current_price * 1.02)
     df = ob_df[range_mask].copy()
-    
-    # Si después del filtro no queda nada (ej: el precio se movió muy rápido),
-    # usamos el dataframe completo para asegurar que se vea algo.
-    if df.empty:
-        df = ob_df.copy()
+    if df.empty: df = ob_df.copy()
 
-    # 2. "Binning" de Alta Resolución ($10 USD)
+    # Binning
     bin_size = 10 
     df['price_bin'] = (df['price'] // bin_size) * bin_size
-    
-    # Agrupamos por precio y lado para sumar el volumen en cada nivel
     df_grouped = df.groupby(['price_bin', 'side'])['amount'].sum().reset_index()
     
     bids = df_grouped[df_grouped['side']=='bid']
@@ -151,143 +132,121 @@ def create_liquidity_heatmap(ob_df, current_price):
     
     fig = go.Figure()
     
-    # 3. Dibujar Barras con Efecto Heatmap (Gradiente de Color)
+    # BIDS (Verde Matrix)
+    fig.add_trace(go.Bar(y=bids['price_bin'], x=bids['amount'], orientation='h', name='Buy Density', marker=dict(color=bids['amount'], colorscale=[[0, '#004d1a'], [1, '#00ff41']], line=dict(width=0)), hovertemplate='BID<br>Price: $%{y:,.0f}<br>Vol: %{x:.2f} BTC'))
     
-    # BIDS (Compradores - Escala Matrix/Verde)
-    fig.add_trace(go.Bar(
-        y=bids['price_bin'], 
-        x=bids['amount'],
-        orientation='h',
-        name='Buy Density',
-        marker=dict(
-            color=bids['amount'], # El brillo depende del tamaño del muro
-            colorscale=[[0, '#004d1a'], [1, '#00ff41']], # De oscuro a Neón
-            line=dict(width=0)
-        ),
-        hovertemplate='BID<br>Price: $%{y:,.0f}<br>Vol: %{x:.2f} BTC'
-    ))
+    # ASKS (Rojo Lava)
+    fig.add_trace(go.Bar(y=asks['price_bin'], x=asks['amount'], orientation='h', name='Sell Density', marker=dict(color=asks['amount'], colorscale=[[0, '#4d0000'], [1, '#ff0000']], line=dict(width=0)), hovertemplate='ASK<br>Price: $%{y:,.0f}<br>Vol: %{x:.2f} BTC'))
     
-    # ASKS (Vendedores - Escala Lava/Rojo)
-    fig.add_trace(go.Bar(
-        y=asks['price_bin'], 
-        x=asks['amount'],
-        orientation='h',
-        name='Sell Density',
-        marker=dict(
-            color=asks['amount'], 
-            colorscale=[[0, '#4d0000'], [1, '#ff0000']], # De oscuro a Fuego
-            line=dict(width=0)
-        ),
-        hovertemplate='ASK<br>Price: $%{y:,.0f}<br>Vol: %{x:.2f} BTC'
-    ))
-    
-    # Línea de Precio Actual (Referencia visual)
     fig.add_hline(y=current_price, line_dash="dash", line_color="white", opacity=0.5, annotation_text="SPOT")
 
-    # 4. Styling y Alertas Visuales
-    
-    # Definimos el título dinámicamente según la integridad de los datos
-    if is_simulated:
-        main_title = "⚠️ LIQUIDITY MAP (SIMULATION MODE - CONNECTION LOST)"
-        title_color = "#FF4B4B" # Rojo Alerta
-    else:
-        main_title = "Liquidity Density (High Res - Live Feed)"
-        title_color = "#e0e0e0" # Blanco Normal
+    main_title = "⚠️ LIQUIDITY MAP (SIMULATION)" if is_simulated else "Liquidity Density (High Res)"
+    title_color = "#FF4B4B" if is_simulated else "#e0e0e0"
 
     fig.update_layout(
-        title=dict(
-            text=main_title,
-            font=dict(color=title_color)
-        ),
-        xaxis_title="Volume Density (BTC)",
-        yaxis_title="Price Level (USD)",
-        height=550,
-        plot_bgcolor='rgba(0,0,0,0)',
-        paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='#e0e0e0', size=10),
-        barmode='overlay', 
-        bargap=0.05, # Pequeño espacio para distinguir niveles
-        showlegend=False,
-        yaxis=dict(
-            # Zoom inteligente: forzamos el rango visible
-            range=[current_price*0.99, current_price*1.01],
-            gridcolor='rgba(255,255,255,0.05)', # Grid muy sutil
-            tickformat=",.0f" # Precios sin decimales
-        )
+        title=dict(text=main_title, font=dict(color=title_color)),
+        xaxis_title="Volume Density (BTC)", yaxis_title="Price Level (USD)",
+        height=550, plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='#e0e0e0', size=10), barmode='overlay', bargap=0.05, showlegend=False,
+        yaxis=dict(range=[current_price*0.99, current_price*1.01], gridcolor='rgba(255,255,255,0.05)', tickformat=",.0f")
     )
-    
-    # Quitamos el grid vertical para limpieza visual
     fig.update_xaxes(showgrid=False, zeroline=False)
-    
     return fig
 
 # ==============================================================================
-# --- 3. OTROS GRÁFICOS (ESTÁNDAR) ---
+# --- 3. GRÁFICOS ANALÍTICOS Y MACRO ---
 # ==============================================================================
+
 def create_volatility_chart(df):
     if df.empty: return go.Figure()
-    
     plot_df = df.iloc[-180:]
     fig = go.Figure()
-    
-    fig.add_trace(go.Scatter(
-        x=plot_df.index, y=plot_df['volatility'],
-        name='Realized Vol (30D)', line=dict(color='#10B981', width=2)
-    ))
-    
+    fig.add_trace(go.Scatter(x=plot_df.index, y=plot_df['volatility'], name='Realized Vol (30D)', line=dict(color='#10B981', width=2)))
     if 'implied_vol' in plot_df.columns:
-        fig.add_trace(go.Scatter(
-            x=plot_df.index, y=plot_df['implied_vol'],
-            name='Implied Vol (Proxy)', line=dict(color='#F59E0B', width=2, dash='dot')
-        ))
-
-    fig.update_layout(
-        title="Volatility Regime (RV vs IV)",
-        height=300, margin=dict(l=0, r=0, t=30, b=0),
-        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='#e0e0e0'), legend=dict(orientation="h", y=1, x=0)
-    )
+        fig.add_trace(go.Scatter(x=plot_df.index, y=plot_df['implied_vol'], name='Implied Vol (Proxy)', line=dict(color='#F59E0B', width=2, dash='dot')))
+    fig.update_layout(title="Volatility Regime", height=300, margin=dict(l=0, r=0, t=30, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0e0e0'), legend=dict(orientation="h", y=1, x=0))
     return fig
 
-def create_onchain_chart(df):
+def create_zscore_chart(df): # (Antes create_onchain_chart) - Mismo gráfico, nombre más preciso
     if df.empty: return go.Figure()
     plot_df = df.iloc[-730:]
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=plot_df.index, y=plot_df['z_score'], name='MVRV Z-Score', fill='tozeroy', line=dict(color='#8B5CF6')))
+    fig.add_trace(go.Scatter(x=plot_df.index, y=plot_df['z_score'], name='Z-Score (200D)', fill='tozeroy', line=dict(color='#8B5CF6')))
     fig.add_hline(y=3.0, line_dash="dash", line_color="#FF4B4B")
     fig.add_hline(y=0.0, line_dash="dash", line_color="#10B981")
-    fig.update_layout(title="On-Chain Valuation (Z-Score)", height=300, margin=dict(l=0, r=0, t=30, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0e0e0'))
+    fig.add_hline(y=-3.0, line_dash="dash", line_color="#10B981")
+    fig.update_layout(title="Mean Reversion (Z-Score)", height=300, margin=dict(l=0, r=0, t=30, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0e0e0'))
     return fig
 
-def create_correlation_chart(df):
+def create_onchain_chart(df): # Alias para compatibilidad
+    return create_zscore_chart(df)
+
+def create_macro_chart(df):
+    """
+    Gráfico comparativo de rendimientos normalizados (Base 0%).
+    """
+    import plotly.express as px
     if df.empty: return go.Figure()
-    returns = df.pct_change().dropna()
-    # Verifica si existen las columnas antes de correlacionar
-    if 'Bitcoin' not in returns.columns: return go.Figure()
     
-    rolling_corr = returns.rolling(window=60).corr(returns['Bitcoin']).drop(columns=['Bitcoin'])
-    fig = go.Figure()
+    fig = px.line(df, x=df.index, y=df.columns)
     
-    # Manejo de errores por si faltan columnas macro
-    if 'S&P 500' in rolling_corr.columns:
-        fig.add_trace(go.Scatter(x=rolling_corr.index, y=rolling_corr['S&P 500'], name='vs S&P 500', line=dict(color='#3B82F6')))
-    if 'Gold' in rolling_corr.columns:
-        fig.add_trace(go.Scatter(x=rolling_corr.index, y=rolling_corr['Gold'], name='vs Gold', line=dict(color='#F59E0B')))
-    if 'DXY (Dollar)' in rolling_corr.columns:
-        fig.add_trace(go.Scatter(x=rolling_corr.index, y=rolling_corr['DXY (Dollar)'], name='vs DXY', line=dict(color='#9CA3AF', dash='dot')))
-
-    fig.add_hline(y=0, line_color="white", line_dash="dash")
-    fig.update_layout(title="Macro Correlations (60D)", height=350, margin=dict(l=0, r=0, t=40, b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0e0e0'), legend=dict(orientation="h", y=1, x=0), yaxis=dict(range=[-1, 1]))
+    # Personalización para TV
+    fig.update_layout(
+        title="Macro Correlations (Normalized Returns)",
+        xaxis_title=None, yaxis_title="Performance %", legend_title=None,
+        height=350, plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='#e0e0e0'), hovermode="x unified",
+        margin=dict(l=0, r=0, t=40, b=0)
+    )
+    # Colores específicos
+    color_map = {'Bitcoin': '#F7931A', 'S&P 500': '#3B82F6', 'Gold': '#F59E0B', 'DXY (Dollar)': '#9CA3AF'}
+    for d in fig.data:
+        if d.name in color_map:
+            d.line.color = color_map[d.name]
+            d.line.width = 3 if d.name == 'Bitcoin' else 1.5
+            
     return fig
 
-def create_depth_chart(ob_df, current_price):
-    if ob_df.empty: return go.Figure()
-    mask = (ob_df['price'] > current_price * 0.85) & (ob_df['price'] < current_price * 1.15)
-    plot_df = ob_df[mask]
-    bids, asks = plot_df[plot_df['side'] == 'bid'], plot_df[plot_df['side'] == 'ask']
+def create_forecast_chart(historical_df, forecast_df):
+    """
+    Gráfico de Profecía: Historia + Predicción + Cono de Incertidumbre
+    """
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=bids['price'], y=bids['total'], fill='tozeroy', name='Bids', line=dict(color='#10B981')))
-    fig.add_trace(go.Scatter(x=asks['price'], y=asks['total'], fill='tozeroy', name='Asks', line=dict(color='#FF4B4B')))
-    fig.add_vline(x=current_price, line_dash="dash", line_color="white")
-    fig.update_layout(title="Market Depth", height=300, margin=dict(t=30, b=0, l=0, r=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font=dict(color='#e0e0e0'), showlegend=False)
+
+    # 1. Datos Históricos
+    fig.add_trace(go.Scatter(
+        x=historical_df.index, y=historical_df['close'],
+        mode='lines', name='Historical Price',
+        line=dict(color='rgba(255,255,255,0.5)', width=1)
+    ))
+
+    # Filtramos solo la parte futura
+    last_date = historical_df.index.max()
+    future_forecast = forecast_df[forecast_df['ds'] > last_date]
+
+    # 2. Cono de Incertidumbre
+    fig.add_trace(go.Scatter(
+        x=future_forecast['ds'], y=future_forecast['yhat_upper'],
+        mode='lines', line=dict(width=0), showlegend=False, hoverinfo='skip'
+    ))
+    fig.add_trace(go.Scatter(
+        x=future_forecast['ds'], y=future_forecast['yhat_lower'],
+        mode='lines', line=dict(width=0),
+        fill='tonexty', fillcolor='rgba(59, 130, 246, 0.2)',
+        name='Confidence Interval'
+    ))
+
+    # 3. La Predicción Central
+    fig.add_trace(go.Scatter(
+        x=future_forecast['ds'], y=future_forecast['yhat'],
+        mode='lines', name='AI Trend Forecast',
+        line=dict(color='#3B82F6', width=2, dash='dash')
+    ))
+
+    fig.update_layout(
+        title="🔮 AI Trend Forecast (Prophet Model)",
+        yaxis_title="Price (USD)", height=450,
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='#e0e0e0'), hovermode="x unified"
+    )
     return fig
