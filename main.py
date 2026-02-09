@@ -13,6 +13,68 @@ from streamlit_autorefresh import st_autorefresh
 st.set_page_config(page_title="Volcano TV", page_icon="📺", layout="wide", initial_sidebar_state="collapsed")
 load_dotenv()
 
+# ==============================================================================
+# --- BOTÓN FLOTANTE DE FULL SCREEN (JS INJECTION) ---
+# ==============================================================================
+def inject_fullscreen_button():
+    components.html(
+        """
+        <script>
+        function toggleFullScreen() {
+            var doc = window.parent.document;
+            var elem = doc.documentElement;
+
+            if (!doc.fullscreenElement) {
+                if (elem.requestFullscreen) {
+                    elem.requestFullscreen();
+                } else if (elem.webkitRequestFullscreen) { /* Safari */
+                    elem.webkitRequestFullscreen();
+                } else if (elem.msRequestFullscreen) { /* IE11 */
+                    elem.msRequestFullscreen();
+                }
+            } else {
+                if (doc.exitFullscreen) {
+                    doc.exitFullscreen();
+                }
+            }
+        }
+        </script>
+
+        <style>
+        .fs-button {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 999999;
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-family: sans-serif;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(5px);
+        }
+        .fs-button:hover {
+            background-color: #F59E0B; /* Color Naranja Volcano al pasar el mouse */
+            border-color: #F59E0B;
+            color: black;
+            transform: scale(1.05);
+        }
+        </style>
+
+        <button onclick="toggleFullScreen()" class="fs-button" title="Toggle Full Screen">
+            ⛶
+        </button>
+        """,
+        height=0, width=0 # Altura 0 para que no ocupe espacio en el layout, solo flota
+    )
+
+# Llamamos a la función para pintar el botón
+inject_fullscreen_button()
+
 # HEARBEAT: Recarga la página cada 1 segundo para verificar cronómetros de rotación
 st_autorefresh(interval=1000, key="tv_heartbeat")
 
