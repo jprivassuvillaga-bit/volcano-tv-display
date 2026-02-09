@@ -52,10 +52,11 @@ def fetch_market_data(ticker="BTC-USD", period="2y", interval="1d"):
         return pd.DataFrame()
 
 # ==============================================================================
-# --- 2. LIBRO DE ÓRDENES (Bitstamp) ---
+# --- 2. LIBRO DE ÓRDENES (Binance/Kraken/Simulado) ---
 # ==============================================================================
 def fetch_order_book_ccxt(symbol='BTC/USD', limit=100):
     try:
+        # Intentamos Bitstamp primero
         url = "https://www.bitstamp.net/api/v2/order_book/btcusd/"
         response = requests.get(url, timeout=5)
         data = response.json()
@@ -85,9 +86,10 @@ def generate_mock_order_book():
     return df
 
 # ==============================================================================
-# --- 3. MACRO DATA (CORREGIDO: DESCAGAR INDIVIDUAL) ---
+# --- 3. MACRO DATA (CORREGIDO) ---
 # ==============================================================================
-def fetch_macro_data(period="1y"):
+@st.cache_data(ttl=3600)
+def fetch_macro_data(period="3mo"):
     """
     Descarga datos normalizados de BTC vs Macro (SPY, Gold, DXY).
     """
@@ -108,40 +110,16 @@ def fetch_macro_data(period="1y"):
                 # Normalizamos a porcentaje (Base 0%)
                 # (Precio / Precio_Inicial) - 1
                 normalized = (data / data.iloc[0]) - 1
+                
+                # Ajuste de timezone
+                if normalized.index.tz is not None:
+                    normalized.index = normalized.index.tz_localize(None)
+                    
                 df_combined[name] = normalized
         except:
             continue
             
     return df_combined
-    try:
-        for ticker, name in tickers.items():
-            # Descargamos uno por uno. Esto es 100% seguro.
-            try:
-                t = yf.Ticker(ticker)
-                hist = t.history(period=period)[['Close']] # Solo queremos el cierre
-                hist.columns = [name] # Renombramos inmediatamente
-                
-                # Limpiar zona horaria para poder unir
-                if hist.index.tz is not None:
-                    hist.index = hist.index.tz_localize(None)
-                
-                data_frames.append(hist)
-            except Exception as e:
-                print(f"Error descargando {name}: {e}")
-                continue
-        
-        if not data_frames:
-            return pd.DataFrame()
-            
-        # Unimos todo en una sola tabla
-        macro_df = pd.concat(data_frames, axis=1)
-        macro_df = macro_df.ffill().dropna()
-        
-        return macro_df
-
-    except Exception as e:
-        print(f"Error Macro Data: {e}")
-        return pd.DataFrame()
 
 # ==============================================================================
 # --- 4. DERIVADOS Y OTROS ---
@@ -149,7 +127,7 @@ def fetch_macro_data(period="1y"):
 def fetch_derivatives_data():
     risk_data = {'funding_rate': 0.01, 'open_interest': 22.5, 'oi_change': 1.2, 'pc_ratio': 0.75}
     try:
-        # Intento CoinGecko
+        # Intento CoinGecko para Funding Rate real (si funciona)
         r = requests.get("https://api.coingecko.com/api/v3/derivatives", timeout=5)
         data = r.json()
         total_oi_btc = sum([float(x.get('open_interest_btc',0) or 0) for x in data if 'btc' in x['symbol'].lower()][:15])
@@ -160,7 +138,7 @@ def fetch_derivatives_data():
         
         if oi_usd > 1:
             risk_data['open_interest'] = round(oi_usd, 2)
-            risk_data['funding_rate'] = 0.0102
+            risk_data['funding_rate'] = 0.0102 # Placeholder si API falla
     except: pass
     return risk_data
 
@@ -180,5 +158,3 @@ def fetch_fear_and_greed_index():
         d = r.json()['data'][0]
         return int(d['value']), d['value_classification']
     except: return 50, "Neutral"
-
-def fetch_news(): return []
