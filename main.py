@@ -241,81 +241,114 @@ elif st.session_state.page_index == 1:
 
 
 # --- VISTA 3: INSTITUTIONAL CREDIT SIMULATOR (SOLO SIMULACIÓN) ---
-# ** HIGH CONTRAST MODE (FULL SCREEN) **
+# ** HIGH CONTRAST MODE (PURE HTML) **
 elif st.session_state.page_index == 2:
-    
-    # Activamos Alto Contraste (Letras Blancas y Brillantes)
-    st.markdown('<div class="tv-high-contrast">', unsafe_allow_html=True)
     
     st.subheader("🛡️ Live Credit Stress Test (Institutional)")
     
-    # --- 1. PARÁMETROS DEL ESCENARIO (Fijos para TV) ---
-    SIM_LOAN = 5_000_000   # $5 Millones (Ejemplo Institucional)
-    SIM_HAIRCUT = 30       # 30% Haircut
-    SIM_LTV = 0.65         # 65% LTV Inicial
-    SIM_LIQ_THRESH = 0.85  # 85% Umbral de Liquidación
+    # --- 1. PARÁMETROS ---
+    SIM_LOAN = 5_000_000   
+    SIM_HAIRCUT = 30       
+    SIM_LTV = 0.65         
+    SIM_LIQ_THRESH = 0.85  
     
-    # --- 2. CÁLCULO "DOUBLE SHIELD" (Tu Lógica) ---
-    # A. Precio que el banco reconoce (Lending Value)
+    # --- 2. CÁLCULOS ---
     lending_price = curr['close'] * (1 - (SIM_HAIRCUT / 100))
-    
-    # B. Colateral Requerido (Basado en Lending Price)
     collateral_btc = SIM_LOAN / (lending_price * SIM_LTV)
     collateral_usd_market = collateral_btc * curr['close']
-    
-    # C. Precio de Liquidación
-    # Deuda = (BTC * Liq_Price * (1-Haircut)) * Threshold
     liq_price = SIM_LOAN / (collateral_btc * (1 - SIM_HAIRCUT/100) * SIM_LIQ_THRESH)
-    
-    # D. Buffer de Seguridad
     buffer_pct = (curr['close'] - liq_price) / curr['close']
     
-    # --- 3. DISEÑO VISUAL (3 COLUMNAS GRANDES) ---
+    # --- 3. FUNCIÓN DE RENDERIZADO (TARJETA TV) ---
+    # Esta función crea HTML puro, igual que el Header, para garantizar nitidez
+    def render_tv_card(title, value, subvalue, color="#FFFFFF", bg_color="#111"):
+        return f"""
+        <div style="
+            background-color: {bg_color};
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+            height: 100%;
+        ">
+            <div style="color: #888; font-size: 16px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 5px;">
+                {title}
+            </div>
+            <div style="color: {color}; font-size: 42px; font-weight: 800; line-height: 1.1;">
+                {value}
+            </div>
+            <div style="color: #ccc; font-size: 18px; margin-top: 5px; font-weight: 400;">
+                {subvalue}
+            </div>
+        </div>
+        """
+
+    # --- 4. DISEÑO VISUAL ---
     c1, c2, c3 = st.columns([1, 1, 1])
     
-    # COLUMNA 1: ESTRUCTURA DEL TRATO
     with c1:
         st.markdown("#### 💼 Deal Structure")
-        st.metric("Principal", f"${SIM_LOAN/1_000_000:.1f}M", "USD")
-        st.metric("Haircut Applied", f"{SIM_HAIRCUT}%", f"Adj. Price: ${lending_price:,.0f}")
-        st.metric("Effective LTV", f"{SIM_LTV:.0%}", "Risk Policy")
+        st.markdown(render_tv_card(
+            "Principal Loan", 
+            f"${SIM_LOAN/1_000_000:.1f}M", 
+            "USD Currency"
+        ), unsafe_allow_html=True)
+        
+        st.markdown(render_tv_card(
+            "Risk Policy", 
+            f"{SIM_HAIRCUT}% HC", 
+            f"Effective LTV: {SIM_LTV:.0%}"
+        ), unsafe_allow_html=True)
 
-    # COLUMNA 2: REQUERIMIENTOS DE COLATERAL (EL NÚMERO IMPORTANTE)
     with c2:
         st.markdown("#### 🔐 Collateral Required")
-        # Mostramos BTC en gigante
+        # Tarjeta Especial Destacada (Dorado)
         st.markdown(f"""
-        <div style="font-size: 50px; font-weight: bold; color: #F59E0B; line-height: 1.2;">
-            {collateral_btc:.2f} BTC
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.metric("Market Value", f"${collateral_usd_market:,.0f}", "100% Value")
-        
-        # Barra de progreso visual: Cuánto del colateral es "reconocido" vs "recorte"
-        st.caption(f"Bank Recognition Rate: {100-SIM_HAIRCUT}%")
-        st.progress(1.0 - (SIM_HAIRCUT/100))
-
-    # COLUMNA 3: ANÁLISIS DE RIESGO (LIQUIDACIÓN)
-    with c3:
-        st.markdown("#### 📉 Risk Thresholds")
-        
-        liq_color = "#FF4B4B" if buffer_pct < 0.15 else "#10B981"
-        
-        st.metric("Liquidation Price", f"${liq_price:,.0f}", f"Threshold: {SIM_LIQ_THRESH:.0%}")
-        
-        st.markdown(f"""
-        <div style="margin-top: 10px;">
-            <div style="font-size: 16px; color: #aaa;">SAFETY BUFFER</div>
-            <div style="font-size: 40px; font-weight: bold; color: {liq_color};">
-                {buffer_pct:.2%}
+        <div style="
+            background-color: #1a1a1a;
+            border: 2px solid #F59E0B;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 15px;
+        ">
+            <div style="color: #F59E0B; font-size: 18px; letter-spacing: 2px; font-weight: bold; margin-bottom: 10px;">
+                REQUIRED COLLATERAL
+            </div>
+            <div style="color: #FFFFFF; font-size: 65px; font-weight: 900; line-height: 1;">
+                {collateral_btc:.2f} <span style="font-size: 30px; color: #888;">BTC</span>
+            </div>
+            <div style="color: #fff; font-size: 22px; margin-top: 10px;">
+                Market Value: ${collateral_usd_market:,.0f}
             </div>
         </div>
         """, unsafe_allow_html=True)
         
-        if buffer_pct > 0.20:
-            st.success("✅ LOW RISK SCENARIO")
-        else:
-            st.warning("⚠️ MODERATE RISK")
+        # Barra de progreso manual (HTML)
+        rec_pct = 100 - SIM_HAIRCUT
+        st.markdown(f"""
+        <div style="color:#aaa; font-size:14px; margin-bottom:5px;">Bank Recognition Rate: {rec_pct}%</div>
+        <div style="width:100%; background:#333; height:10px; border-radius:5px;">
+            <div style="width:{rec_pct}%; background:#10B981; height:100%; border-radius:5px;"></div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    st.markdown('</div>', unsafe_allow_html=True)
+    with c3:
+        st.markdown("#### 📉 Risk Analysis")
+        
+        liq_color = "#FF4B4B" if buffer_pct < 0.15 else "#10B981"
+        buffer_status = "CRITICAL" if buffer_pct < 0.15 else "SAFE ZONE"
+        
+        st.markdown(render_tv_card(
+            "Liquidation Price", 
+            f"${liq_price:,.0f}", 
+            f"Threshold: {SIM_LIQ_THRESH:.0%}",
+            color=liq_color
+        ), unsafe_allow_html=True)
+        
+        st.markdown(render_tv_card(
+            "Safety Buffer", 
+            f"{buffer_pct:.2%}", 
+            f"Status: {buffer_status}",
+            color=liq_color
+        ), unsafe_allow_html=True)
