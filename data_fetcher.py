@@ -89,18 +89,30 @@ def generate_mock_order_book():
 # ==============================================================================
 def fetch_macro_data(period="1y"):
     """
-    Descarga cada activo por separado y los une manualmente.
-    Esto EVITA el error de MultiIndex/KeyError 'Bitcoin'.
+    Descarga datos normalizados de BTC vs Macro (SPY, Gold, DXY).
     """
     tickers = {
         'BTC-USD': 'Bitcoin',
-        '^GSPC': 'S&P 500',
+        'SPY': 'S&P 500',
         'GC=F': 'Gold',
         'DX-Y.NYB': 'DXY (Dollar)'
     }
     
-    data_frames = []
+    df_combined = pd.DataFrame()
     
+    for symbol, name in tickers.items():
+        try:
+            # Descargamos solo cierre
+            data = yf.Ticker(symbol).history(period=period)['Close']
+            if not data.empty:
+                # Normalizamos a porcentaje (Base 0%)
+                # (Precio / Precio_Inicial) - 1
+                normalized = (data / data.iloc[0]) - 1
+                df_combined[name] = normalized
+        except:
+            continue
+            
+    return df_combined
     try:
         for ticker, name in tickers.items():
             # Descargamos uno por uno. Esto es 100% seguro.
