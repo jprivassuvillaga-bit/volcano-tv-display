@@ -91,6 +91,12 @@ def get_tv_data():
     return m_df, o_df, news, derivs, etf, macro, fng_val, fng_lbl
 
 market_df, ob_df, all_news, derivs, etf_data, macro_df, fg_value, fg_label = get_tv_data()
+if market_df.empty or 'close' not in market_df.columns:
+    st.warning("⚠️ Market Data Feed Reconnecting... (Yahoo API Issue)")
+    st.caption("Auto-retry in few seconds...")
+    time.sleep(2)
+    st.rerun() # Reintentar automáticamente
+    st.stop()
 
 curr = {
     'close': market_df['close'].iloc[-1],
