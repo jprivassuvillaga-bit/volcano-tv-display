@@ -306,27 +306,35 @@ def create_seasonality_heatmap(df):
     return fig
 
 # --- 5. RAINBOW CHART (ESTILO NEÓN) ---
+# --- 5. RAINBOW CHART (CORREGIDO) ---
 def create_rainbow_chart(df):
     if df.empty: return go.Figure()
-    
-    # Necesitamos historia completa para que se vea bien
-    # Usamos la misma lógica de Power Law pero con bandas de colores
-    # Formula simple aproximada del Rainbow: Log price regression + Desviaciones
     
     import numpy as np
     from scipy import stats
     
     df_rain = df[df['close'] > 0].copy()
+    
+    # 1. Aseguramos que el índice no tenga zona horaria (para evitar choque con genesis)
+    if df_rain.index.tz is not None:
+        df_rain.index = df_rain.index.tz_localize(None)
+
     genesis = pd.Timestamp("2009-01-03")
-    df_rain['days'] = (df_rain.index - genesis).dt.days
+    
+    # 2. CORRECCIÓN: Usamos .days directamente (sin .dt)
+    # Al restar el Index - Timestamp, obtenemos un TimedeltaIndex que tiene .days nativo
+    df_rain['days'] = (df_rain.index - genesis).days
+    
+    # Filtramos días negativos o cero (antes del génesis)
     df_rain = df_rain[df_rain['days'] > 0]
     
+    # --- MATEMÁTICA LOG-LOG ---
     x = np.log10(df_rain['days'])
     y = np.log10(df_rain['close'])
     
     slope, intercept, _, _, _ = stats.linregress(x, y)
     
-    # Bandas del Arcoiris (Offsets logarítmicos)
+    # Bandas del Arcoiris (Offsets logarítmicos calibrados)
     bands = [
         ("Bubble Territory",  1.0,  '#FF0000'), # Rojo
         ("FOMO",              0.75, '#FF7F00'), # Naranja
@@ -337,24 +345,18 @@ def create_rainbow_chart(df):
     
     fig = go.Figure()
     
-    # Dibujamos bandas (De arriba a abajo)
+    # Dibujamos bandas
     for name, offset, color in bands:
-        # Calculamos la curva
         y_band = 10 ** (intercept + slope * x + offset)
-        
         fig.add_trace(go.Scatter(
             x=df_rain.index, y=y_band,
-            mode='lines',
-            line=dict(color=color, width=2),
-            name=name
+            mode='lines', line=dict(color=color, width=2), name=name
         ))
 
-    # Precio Real (Blanco Brillante y grueso para que destaque sobre el arcoiris)
+    # Precio Real
     fig.add_trace(go.Scatter(
         x=df_rain.index, y=df_rain['close'],
-        mode='lines',
-        line=dict(color='white', width=3),
-        name='BTC Price'
+        mode='lines', line=dict(color='white', width=3), name='BTC Price'
     ))
 
     fig.update_layout(
