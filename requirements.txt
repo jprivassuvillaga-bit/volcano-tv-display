@@ -8,3 +8,4 @@ ccxt
 feedparser
 streamlit-autorefresh
 requests
+scipy
