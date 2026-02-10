@@ -451,7 +451,7 @@ def create_power_law_chart(df):
     ))
 
     fig.update_layout(
-        title=None, # <--- SIN TÍTULO INTERNO (LIMPIO)
+         
         yaxis_type="log", # Escala Logarítmica obligatoria
         height=550,
         margin=dict(l=0, r=0, t=10, b=0), # Márgenes mínimos
