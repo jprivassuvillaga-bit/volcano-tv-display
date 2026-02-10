@@ -160,7 +160,7 @@ current_time = time.time()
 
 # Rotación de Pestañas (Tiempos personalizados por vista)
 # Vista 0: 30s | Vista 1: 15s | Vista 2: 15s
-cycle_times = [30, 15, 15, 20] 
+cycle_times = [25, 25, 25, 25] 
 current_duration = cycle_times[st.session_state.page_index]
 
 if current_time - st.session_state.last_tab_change > current_duration:
