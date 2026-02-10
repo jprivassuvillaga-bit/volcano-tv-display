@@ -295,7 +295,7 @@ def create_seasonality_heatmap(df):
         zmid=0, # El centro del color es 0%
         text=text_display.values, # Usamos nuestra matriz de texto limpia
         texttemplate="%{text}",   # Mostrar solo el texto limpio
-        textfont={"size": 16, "family": "Arial Black", "color": "white"}, # Letra más gruesa y grande
+        textfont={"size": 12, "family": "Arial Black", "color": "white"}, # Letra más gruesa y grande
         showscale=False, # <--- ADIÓS A LA BARRA LATERAL
         xgap=3, # Espacio entre celdas
         ygap=3,
