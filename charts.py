@@ -390,3 +390,78 @@ def create_rainbow_chart(df):
     )
     
     return fig
+
+# --- EN UTILS/CHARTS.PY ---
+
+def create_power_law_chart(df):
+    if df.empty: return go.Figure()
+    
+    from scipy import stats
+    import numpy as np
+    
+    # 1. Preparación de Datos
+    # Copiamos y limpiamos zonas horarias
+    pl_df = df[df['close'] > 0].copy()
+    if pl_df.index.tz is not None: pl_df.index = pl_df.index.tz_localize(None)
+    
+    genesis_date = pd.Timestamp("2009-01-03")
+    pl_df['days_since'] = (pl_df.index - genesis_date).days
+    pl_df = pl_df[pl_df['days_since'] > 0]
+
+    # 2. Matemática Power Law (Log-Log Regression)
+    x = np.log10(pl_df['days_since'])
+    y = np.log10(pl_df['close'])
+    
+    slope, intercept, _, _, _ = stats.linregress(x, y)
+    
+    # Calculamos Fair Value y Bandas
+    pl_df['fair_value'] = 10 ** (intercept + slope * x)
+    pl_df['support'] = 10 ** (intercept - 0.35 + slope * x)    # Banda inferior
+    pl_df['resistance'] = 10 ** (intercept + 0.5 + slope * x)  # Banda superior
+
+    # 3. Graficado
+    fig = go.Figure()
+    
+    # Bandas (Rellenos Sutiles)
+    fig.add_trace(go.Scatter(
+        x=pl_df.index, y=pl_df['resistance'], 
+        mode='lines', line=dict(color='rgba(139, 92, 246, 0.4)', width=1), # Morado
+        name='Resistance (Top)'
+    ))
+    
+    fig.add_trace(go.Scatter(
+        x=pl_df.index, y=pl_df['support'], 
+        mode='lines', line=dict(color='rgba(239, 68, 68, 0.4)', width=1), # Rojo
+        fill='tonexty', fillcolor='rgba(255, 255, 255, 0.03)', # Relleno muy sutil
+        name='Support (Bottom)'
+    ))
+
+    # Fair Value (La línea "imán")
+    fig.add_trace(go.Scatter(
+        x=pl_df.index, y=pl_df['fair_value'], 
+        mode='lines', line=dict(color='#10B981', width=2), # Verde
+        name='Fair Value'
+    ))
+
+    # Precio Real
+    fig.add_trace(go.Scatter(
+        x=pl_df.index, y=pl_df['close'], 
+        mode='lines', line=dict(color='#F59E0B', width=1), 
+        name='BTC Price'
+    ))
+
+    fig.update_layout(
+        title=None, # <--- SIN TÍTULO INTERNO (LIMPIO)
+        yaxis_type="log", # Escala Logarítmica obligatoria
+        height=550,
+        margin=dict(l=0, r=0, t=10, b=0), # Márgenes mínimos
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='#e0e0e0'),
+        xaxis=dict(showgrid=False),
+        yaxis=dict(showgrid=True, gridcolor='rgba(255,255,255,0.1)'),
+        hovermode="x unified",
+        legend=dict(orientation="h", y=0, x=0.5, xanchor="center")
+    )
+    
+    return fig
