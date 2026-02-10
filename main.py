@@ -160,11 +160,11 @@ current_time = time.time()
 
 # Rotación de Pestañas (Tiempos personalizados por vista)
 # Vista 0: 30s | Vista 1: 15s | Vista 2: 15s
-cycle_times = [25, 25, 25, 25] 
+cycle_times = [25, 25, 25, 25, 25] 
 current_duration = cycle_times[st.session_state.page_index]
 
 if current_time - st.session_state.last_tab_change > current_duration:
-    st.session_state.page_index = (st.session_state.page_index + 1) % 4 
+    st.session_state.page_index = (st.session_state.page_index + 1) % 5
     st.session_state.last_tab_change = current_time
 
 # Rotación de Noticias (Cada 2 mins avanzamos 10 noticias)
@@ -401,3 +401,60 @@ elif st.session_state.page_index == 3:
             st.plotly_chart(charts.create_seasonality_heatmap(full_history), use_container_width=True)
         else:
             st.warning("Loading...")
+
+# --- VISTA 4 (Indice 4): MINING & SECURITY ---
+elif st.session_state.page_index == 4:
+    
+    # Header Estilo TV
+    st.markdown("""
+    <div style="margin-bottom: 10px; color: #888; font-size: 16px; letter-spacing: 2px; font-weight: 700; text-transform: uppercase;">
+        ⛏️ Network Security & Miner Status
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Cargar Datos
+    full_history = data_fetcher.fetch_full_history() # Asegúrate de tener esta en tu data_fetcher TV
+    hash_df = data_fetcher.fetch_hashrate_data()
+    
+    if not hash_df.empty and not full_history.empty:
+        
+        # --- LÓGICA RÁPIDA ---
+        curr_hash = hash_df['hash_rate'].iloc[-1] / 1_000_000 # EH/s
+        ma30 = hash_df['hash_rate'].rolling(30).mean().iloc[-1]
+        ma60 = hash_df['hash_rate'].rolling(60).mean().iloc[-1]
+        
+        # Lógica de Capitulación
+        is_capitulation = ma30 < ma60
+        status_text = "CAPITULATION" if is_capitulation else "HEALTHY EXPANSION"
+        status_color = "#FF0000" if is_capitulation else "#00FF00" # Rojo o Verde Neón
+        status_icon = "⚠️" if is_capitulation else "🚀"
+        
+        # --- TARJETAS GIGANTES HTML (DISEÑO TV) ---
+        c1, c2 = st.columns([1, 2])
+        
+        with c1:
+            # Tarjeta 1: Hashrate (Dato Duro)
+            st.markdown(f"""
+            <div style="background: #111; border: 1px solid #333; border-radius: 12px; padding: 20px; margin-bottom: 15px;">
+                <div style="color: #888; font-size: 14px; text-transform: uppercase;">Total Hashrate</div>
+                <div style="color: white; font-size: 50px; font-weight: 900; line-height: 1;">{curr_hash:.0f}</div>
+                <div style="color: #666; font-size: 20px;">Exahashes/s</div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Tarjeta 2: Status (Semáforo)
+            st.markdown(f"""
+            <div style="background: #111; border: 2px solid {status_color}; border-radius: 12px; padding: 20px;">
+                <div style="color: #888; font-size: 14px; text-transform: uppercase;">Miner Cycle</div>
+                <div style="color: {status_color}; font-size: 38px; font-weight: 900; line-height: 1.1; margin-top:5px;">
+                    {status_icon} {status_text}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with c2:
+            # Gráfico a la derecha (Ocupa 66% de pantalla)
+            st.plotly_chart(charts.create_miner_metrics_chart_tv(full_history, hash_df), use_container_width=True)
+            
+    else:
+        st.warning("⏳ Syncing Node Data...")
