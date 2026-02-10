@@ -303,10 +303,7 @@ def create_seasonality_heatmap(df):
     ))
 
     fig.update_layout(
-        title=dict(
-            text="📅 Historical Monthly Returns",
-            font=dict(size=24, color='white')
-        ),
+        title=None,
         height=600, # Un poco más alto para que respire
         margin=dict(l=0, r=0, t=60, b=0), # Márgenes ajustados
         plot_bgcolor='rgba(0,0,0,0)',
@@ -381,7 +378,7 @@ def create_rainbow_chart(df):
     ))
 
     fig.update_layout(
-        title="🌈 Bitcoin Rainbow Valuation Model",
+        title=None,
         yaxis_type="log",
         height=550,
         plot_bgcolor='rgba(0,0,0,0)',
