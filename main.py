@@ -367,35 +367,30 @@ elif st.session_state.page_index == 2:
             color=liq_color
         ), unsafe_allow_html=True)
         
-     # --- VISTA 4: VISUAL ALPHA (RAINBOW & SEASONALITY) ---
+     # --- VISTA 4: VISUAL ALPHA (POWER LAW & SEASONALITY) ---
 elif st.session_state.page_index == 3:
-    
-    # Título Principal de la Sección (Opcional, si quieres quitarlo también borra esta línea)
-    st.subheader("🌈 Valuation & Seasonality Cycles")
     
     full_history = data_fetcher.fetch_full_history()
     
-    c1, c2 = st.columns([3, 2]) # 60% Rainbow | 40% Seasonality
+    c1, c2 = st.columns([3, 2]) # 60% Power Law | 40% Seasonality
     
-    # COLUMNA 1: RAINBOW
+    # COLUMNA 1: POWER LAW (Reemplazando al Rainbow)
     with c1:
-        # Header HTML Personalizado (Estilo Bitbo: Simple, Gris, Uppercase)
+        # Header Estilo Bitbo
         st.markdown("""
         <div style="margin-bottom: 5px; color: #888; font-size: 14px; letter-spacing: 1px; font-weight: 600; text-transform: uppercase;">
-            🌈 Bitcoin Rainbow Valuation Model
+            🪐 Bitcoin Power Law Corridor
         </div>
         """, unsafe_allow_html=True)
         
         if not full_history.empty:
-            st.plotly_chart(charts.create_rainbow_chart(full_history), use_container_width=True)
-            # Leyenda discreta
-            st.caption("Logarithmic regression bands indicating market sentiment zones.")
+            st.plotly_chart(charts.create_power_law_chart(full_history), use_container_width=True)
+            st.caption("Log-Log Regression. Price oscillates around the Green Fair Value line.")
         else:
-            st.warning("Loading...")
+            st.warning("Loading History...")
 
-    # COLUMNA 2: SEASONALITY
+    # COLUMNA 2: SEASONALITY (Se queda igual, se ve muy bien)
     with c2:
-        # Header HTML Personalizado
         st.markdown("""
         <div style="margin-bottom: 5px; color: #888; font-size: 14px; letter-spacing: 1px; font-weight: 600; text-transform: uppercase;">
             📅 Historical Monthly Returns
