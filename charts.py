@@ -439,7 +439,7 @@ def create_power_law_chart(df):
     # Fair Value (La línea "imán")
     fig.add_trace(go.Scatter(
         x=pl_df.index, y=pl_df['fair_value'], 
-        mode='lines', ine=dict(color='#00FF00', width=2.5), # Verde
+        mode='lines', ine=dict(color='#00FF00', width=2), # Verde
         name='Fair Value'
     ))
 
