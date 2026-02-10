@@ -4,7 +4,9 @@ import numpy as np
 import time
 from datetime import datetime
 from dotenv import load_dotenv
-import data_fetcher, risk_math, charts, news_fetcher
+import data_fetcher
+import risk_math
+import charts
 from streamlit_autorefresh import st_autorefresh
 
 # ==============================================================================
