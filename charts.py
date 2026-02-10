@@ -425,13 +425,13 @@ def create_power_law_chart(df):
     # Bandas (Rellenos Sutiles)
     fig.add_trace(go.Scatter(
         x=pl_df.index, y=pl_df['resistance'], 
-        mode='lines', line=dict(color='rgba(139, 92, 246, 0.4)', width=1), # Morado
+        mode='lines', line=dict(color='#D946EF', width=2), # Morado
         name='Resistance (Top)'
     ))
     
     fig.add_trace(go.Scatter(
         x=pl_df.index, y=pl_df['support'], 
-        mode='lines', line=dict(color='rgba(239, 68, 68, 0.4)', width=1), # Rojo
+        mode='lines', line=dict(color='#FF0000', width=2), # Rojo
         fill='tonexty', fillcolor='rgba(255, 255, 255, 0.03)', # Relleno muy sutil
         name='Support (Bottom)'
     ))
@@ -439,7 +439,7 @@ def create_power_law_chart(df):
     # Fair Value (La línea "imán")
     fig.add_trace(go.Scatter(
         x=pl_df.index, y=pl_df['fair_value'], 
-        mode='lines', line=dict(color='#10B981', width=2), # Verde
+        mode='lines', ine=dict(color='#00FF00', width=2.5), # Verde
         name='Fair Value'
     ))
 
