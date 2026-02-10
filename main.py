@@ -126,16 +126,30 @@ if market_df.empty or 'close' not in market_df.columns:
     time.sleep(2)
     st.rerun()
 
+# 1. Intentamos obtener precio en vivo (Kraken)
+# (Asegúrate de haber agregado la función fetch_live_price en data_fetcher.py)
+live_price = data_fetcher.fetch_live_price()
+
+# 2. Decidimos qué precio usar
+if live_price:
+    current_price = live_price
+else:
+    current_price = market_df['close'].iloc[-1]
+
+# 3. Calculamos el cambio % (Precio Vivo vs Cierre de Ayer)
+prev_close = market_df['close'].iloc[-2]
+price_delta = (current_price - prev_close) / prev_close
+
+# 4. Construimos el estado actual con el precio vivo
 curr = {
-    'close': market_df['close'].iloc[-1],
+    'close': current_price, # <--- USAMOS EL PRECIO VIVO
     'volatility': market_df['volatility'].iloc[-1],
     'z_score': market_df['z_score'].iloc[-1] if 'z_score' in market_df.columns else 0,
-    'high': market_df['high'].iloc[-1],
-    'low': market_df['low'].iloc[-1],
-    'vwap': market_df['sma_50'].iloc[-1] # Usamos SMA50 como proxy de tendencia visual si no hay VWAP intradía
+    # Ajustamos High/Low dinámicamente si el precio vivo rompe los rangos del día
+    'high': max(market_df['high'].iloc[-1], current_price),
+    'low': min(market_df['low'].iloc[-1], current_price),
+    'vwap': market_df['sma_50'].iloc[-1] 
 }
-price_delta = (curr['close'] - market_df['close'].iloc[-2]) / market_df['close'].iloc[-2]
-
 # Entrenar AI Forecast (Si Prophet está disponible)
 forecast_df = get_or_train_forecast(market_df)
 
