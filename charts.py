@@ -303,9 +303,9 @@ def create_seasonality_heatmap(df):
     ))
 
     fig.update_layout(
-        title=None,
+        
         height=600, # Un poco más alto para que respire
-        margin=dict(l=0, r=0, t=60, b=0), # Márgenes ajustados
+        margin=dict(l=0, r=0, t=0, b=0), # Márgenes ajustados
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
         font=dict(color='#888'), # Color de los ejes (años/meses) más sutil
@@ -378,7 +378,7 @@ def create_rainbow_chart(df):
     ))
 
     fig.update_layout(
-        title=None,
+        
         yaxis_type="log",
         height=550,
         plot_bgcolor='rgba(0,0,0,0)',
