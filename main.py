@@ -391,7 +391,7 @@ elif st.session_state.page_index == 3:
 
     # COLUMNA 2: SEASONALITY MATRIX
     with c2:
-        st.markdown("#### 📅 Monthly Seasonality")
+        st.markdown("#### ")
         if not full_history.empty:
             st.plotly_chart(charts.create_seasonality_heatmap(full_history), use_container_width=True)
             
