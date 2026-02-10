@@ -213,23 +213,36 @@ def fetch_full_history():
     except Exception as e:
         print(f"Error Full History: {e}")
         return pd.DataFrame()
-    # --- AGREGAR EN UTILS/DATA_FETCHER.PY (TV) ---
-import requests
-
-@st.cache_data(ttl=3600*24) # Cache 24h
-def fetch_hashrate_data():
-    """Descarga Hashrate histórico de Blockchain.info para la TV."""
-    try:
-        # Pedimos 2 años para calcular bien las medias móviles
-        url = "https://api.blockchain.info/charts/hash-rate?timespan=2years&format=json"
-        data = requests.get(url).json()['values']
         
+  @st.cache_data(ttl=3600*24) # Cache de 24 horas
+def fetch_hashrate_data():
+    """
+    Descarga el Hash Rate histórico de Bitcoin (Blockchain.info).
+    Retorna un DataFrame con fecha y hash_rate.
+    """
+    try:
+        # URL de la API de Blockchain.info (2 años de historia)
+        url = "https://api.blockchain.info/charts/hash-rate?timespan=2years&format=json"
+        
+        # Hacemos la petición (con timeout por si acaso)
+        response = requests.get(url, timeout=10)
+        data = response.json()['values']
+        
+        # Convertimos a DataFrame
         df = pd.DataFrame(data)
         df.columns = ['timestamp', 'hash_rate']
+        
+        # Limpieza de fechas
         df['date'] = pd.to_datetime(df['timestamp'], unit='s')
         df.set_index('date', inplace=True)
         df.drop('timestamp', axis=1, inplace=True)
         
+        # Eliminar duplicados si la API falla
+        df = df[~df.index.duplicated(keep='last')]
+        
         return df
+        
     except Exception as e:
+        print(f"Error fetching hashrate: {e}")
+        # Retornamos un DataFrame vacío para que la app no explote
         return pd.DataFrame()
