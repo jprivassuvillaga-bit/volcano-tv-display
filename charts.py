@@ -251,61 +251,82 @@ def create_forecast_chart(historical_df, forecast_df):
     )
     return fig
 # --- 4. SEASONALITY HEATMAP (VISUAL IMPONENTE) ---
+# --- EN UTILS/CHARTS.PY ---
+
 def create_seasonality_heatmap(df):
     if df.empty: return go.Figure()
     
-    # Preparamos los datos
+    # 1. Preparación de Datos
     df_seas = df.copy()
-    df_seas['year'] = df_seas.index.year
-    df_seas['month'] = df_seas.index.month_name().str[:3] # Jan, Feb...
-    df_seas['month_num'] = df_seas.index.month
     
-    # Calculamos retorno mensual
-    # Agrupamos por Año y Mes, tomamos el último precio y lo comparamos con el primero
-    monthly_data = df_seas.resample('M').agg({'close': ['first', 'last']})
-    monthly_data.columns = ['open', 'close']
-    monthly_data['pct_change'] = (monthly_data['close'] - monthly_data['open']) / monthly_data['open']
+    # Calculamos cambio mensual
+    monthly_data = df_seas.resample('ME').agg({'close': 'last'}) # 'ME' es Month End
+    monthly_data['pct_change'] = monthly_data['close'].pct_change()
+    
+    # Creamos columnas para el pivote
     monthly_data['year'] = monthly_data.index.year
-    monthly_data['month'] = monthly_data.index.month_name().str[:3]
     monthly_data['month_num'] = monthly_data.index.month
-
-    # Pivot Table para el Heatmap
+    
+    # Pivot Table
     heatmap_data = monthly_data.pivot(index='year', columns='month_num', values='pct_change')
     
-    # Ordenamos meses
+    # IMPORTANTE: Eliminamos años que no tengan NINGÚN dato (limpieza de filas vacías)
+    heatmap_data = heatmap_data.dropna(how='all')
+    
+    # Nombres de meses fijos
     month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     
-    # CREACIÓN DEL HEATMAP
+    # 2. Matriz de Texto (Para ocultar los NaNs)
+    # Creamos una copia donde los valores nulos sean strings vacíos ""
+    text_matrix = heatmap_data.copy()
+    # Formateamos a porcentaje sin decimales (ej: 12%) y quitamos los nulos
+    text_display = text_matrix.applymap(lambda x: f"{x:.0%}" if pd.notnull(x) else "")
+
+    # 3. CREACIÓN DEL HEATMAP
     fig = go.Figure(data=go.Heatmap(
         z=heatmap_data.values,
         x=month_names,
         y=heatmap_data.index,
         colorscale=[
-            [0, '#EF4444'],      # Rojo Fuerte (Caída)
-            [0.5, '#111111'],    # Negro (Neutro)
-            [1, '#00C805']       # Verde Neón (Subida)
+            [0, '#EF4444'],      # Rojo (Bearish)
+            [0.5, '#1a1a1a'],    # Gris Oscuro (Neutro/Cero) - Mejor que negro absoluto
+            [1, '#00C805']       # Verde Neón (Bullish)
         ],
-        zmid=0, # Centrar el color negro en 0%
-        text=heatmap_data.values,
-        texttemplate="%{text:.0%}", # Mostrar porcentaje dentro del cuadro
-        textfont={"size": 14, "color": "white"}, # Texto grande para TV
-        xgap=2, # Espacio entre celdas (estilo rejilla)
-        ygap=2
+        zmid=0, # El centro del color es 0%
+        text=text_display.values, # Usamos nuestra matriz de texto limpia
+        texttemplate="%{text}",   # Mostrar solo el texto limpio
+        textfont={"size": 16, "family": "Arial Black", "color": "white"}, # Letra más gruesa y grande
+        showscale=False, # <--- ADIÓS A LA BARRA LATERAL
+        xgap=3, # Espacio entre celdas
+        ygap=3,
+        hoverinfo='none' # <--- ADIÓS A LOS TOOLTIPS MOLESTOS
     ))
 
     fig.update_layout(
-        title="📅 Bitcoin Monthly Seasonality Matrix",
-        height=550,
+        title=dict(
+            text="📅 Historical Monthly Returns",
+            font=dict(size=24, color='white')
+        ),
+        height=600, # Un poco más alto para que respire
+        margin=dict(l=0, r=0, t=60, b=0), # Márgenes ajustados
         plot_bgcolor='rgba(0,0,0,0)',
         paper_bgcolor='rgba(0,0,0,0)',
-        font=dict(color='#e0e0e0'),
-        xaxis=dict(side="top"), # Meses arriba para leer mejor
-        yaxis=dict(autorange="reversed") # Años recientes arriba
+        font=dict(color='#888'), # Color de los ejes (años/meses) más sutil
+        xaxis=dict(
+            side="top", 
+            tickfont=dict(size=14, color='white'),
+            fixedrange=True # Evita zoom accidental
+        ), 
+        yaxis=dict(
+            autorange="reversed", # Años recientes abajo (o arriba si prefieres)
+            tickfont=dict(size=14, color='white'),
+            dtick=1, # Mostrar todos los años
+            fixedrange=True
+        ) 
     )
     
     return fig
-
-# --- 5. RAINBOW CHART (ESTILO NEÓN) ---
+    
 # --- 5. RAINBOW CHART (CORREGIDO) ---
 def create_rainbow_chart(df):
     if df.empty: return go.Figure()
