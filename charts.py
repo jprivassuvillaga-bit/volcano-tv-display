@@ -465,3 +465,48 @@ def create_power_law_chart(df):
     )
     
     return fig
+    
+    def create_miner_metrics_chart_tv(price_df, hash_df):
+    if price_df.empty or hash_df.empty: return go.Figure()
+    
+    # 1. Preparar Datos
+    p = price_df['close'].resample('D').mean()
+    h = hash_df['hash_rate'].resample('D').mean()
+    df = pd.concat([p, h], axis=1).dropna()
+    df.columns = ['price', 'hash']
+    
+    # Indicadores
+    df['ma30'] = df['hash'].rolling(30).mean()
+    df['ma60'] = df['hash'].rolling(60).mean()
+    # Ratio Normalizado para TV
+    df['val'] = df['price'] / (df['hash'] / 1000000)
+
+    # 2. Configurar Subplots Verticales
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, 
+                        vertical_spacing=0.1, row_heights=[0.6, 0.4])
+
+    # --- ARRIBA: HASH RIBBONS (NEÓN) ---
+    # Fast Line (Verde Neón)
+    fig.add_trace(go.Scatter(x=df.index, y=df['ma30'], mode='lines', 
+                             line=dict(color='#00FF00', width=3), name='Fast (30D)'), row=1, col=1)
+    # Slow Line (Rojo Neón)
+    fig.add_trace(go.Scatter(x=df.index, y=df['ma60'], mode='lines', 
+                             line=dict(color='#FF0000', width=3), name='Slow (60D)'), row=1, col=1)
+
+    # --- ABAJO: VALUATION (AMARILLO) ---
+    fig.add_trace(go.Scatter(x=df.index, y=df['val'], mode='lines', 
+                             line=dict(color='#F59E0B', width=2), fill='tozeroy', 
+                             fillcolor='rgba(245, 158, 11, 0.1)', name='Price/Hash'), row=2, col=1)
+
+    # 3. Estilo TV (Minimalista)
+    fig.update_layout(
+        height=500, margin=dict(l=0, r=0, t=10, b=0),
+        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='white', size=14),
+        showlegend=False, # Sin leyenda para más espacio
+        hovermode="x unified"
+    )
+    fig.update_xaxes(showgrid=False)
+    fig.update_yaxes(showgrid=True, gridcolor='rgba(255,255,255,0.1)')
+    
+    return fig
