@@ -366,35 +366,35 @@ elif st.session_state.page_index == 2:
             f"Status: {buffer_status}",
             color=liq_color
         ), unsafe_allow_html=True)
-        # --- VISTA 4: VISUAL ALPHA (RAINBOW & SEASONALITY) ---
+        
+      # --- VISTA 4: VISUAL ALPHA (RAINBOW & SEASONALITY) ---
 elif st.session_state.page_index == 3:
     st.subheader("🌈 Valuation & Seasonality Cycles")
     
-    # Usamos columnas para mostrar ambos o rotamos internamente
-    # Para TV, mejor uno grande. Vamos a mostrar el Seasonality que es muy llamativo.
+    # Descarga de historia completa (cacheada)
+    full_history = data_fetcher.fetch_full_history()
     
-    # Nota: Necesitamos el historial completo para estos charts.
-    # Si 'market_df' solo tiene 2 años, el Rainbow no saldrá bien.
-    # Deberíamos usar 'macro_df' si tiene la historia completa, o descargarla rápido.
+    # Dividimos la pantalla: 60% Rainbow (Izq) | 40% Seasonality (Der)
+    c1, c2 = st.columns([3, 2])
     
-    # Descarga rápida de historia completa (cacheada) si no la tenemos
-    full_history = data_fetcher.fetch_full_history() # Asegúrate de tener esta función en data_fetcher
-    
-    c1, c2 = st.columns([2, 1])
-    
+    # COLUMNA 1: RAINBOW CHART (El que faltaba)
     with c1:
-        st.plotly_chart(charts.create_seasonality_heatmap(full_history), use_container_width=True)
-        
+        st.markdown("#### 🌈 Bitcoin Rainbow Model")
+        if not full_history.empty:
+            # ¡AQUÍ ESTÁ LA LÍNEA QUE FALTABA!
+            st.plotly_chart(charts.create_rainbow_chart(full_history), use_container_width=True)
+            
+            # Leyenda rápida explicativa
+            st.caption("🔵 Cheap | 🟡 Fair | 🔴 Bubble")
+        else:
+            st.warning("Loading historical data...")
+
+    # COLUMNA 2: SEASONALITY MATRIX
     with c2:
-        # Métricas de Estacionalidad del Mes Actual
-        month_name = datetime.now().strftime("%b")
-        st.markdown(f"#### 📅 {month_name} Performance")
-        
-        # Calculamos promedio histórico de este mes
-        # (Lógica simplificada para el ejemplo)
-        st.metric("Avg. Return", "+12.4%", "Historically Bullish")
-        st.metric("Win Rate", "78%", "7 of 9 years Green")
-        
-        st.markdown("---")
-        st.markdown("#### 🌈 Model Status")
-        st.markdown("Current Zone: **ACCUMULATE** (Blue Band)")
+        st.markdown("#### 📅 Monthly Seasonality")
+        if not full_history.empty:
+            st.plotly_chart(charts.create_seasonality_heatmap(full_history), use_container_width=True)
+            
+            # Métricas rápidas debajo del calendario
+            month_name = datetime.now().strftime("%b")
+            st.success(f"**{month_name} Historical Trend:** Usually a bullish month with accumulation patterns.")
