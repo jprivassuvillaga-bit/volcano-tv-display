@@ -158,3 +158,33 @@ def fetch_fear_and_greed_index():
         d = r.json()['data'][0]
         return int(d['value']), d['value_classification']
     except: return 50, "Neutral"
+
+import requests # Asegúrate de tener esto importado arriba
+
+def fetch_live_price():
+    """
+    Obtiene el precio REAL-TIME de Kraken (XBT/USD).
+    Es seguro para servidores en US (Streamlit Cloud) y muy rápido.
+    """
+    try:
+        # Headers para simular un navegador real y evitar bloqueos raros
+        headers = {
+            'User-Agent': 'Mozilla/5.0'
+        }
+        # URL Pública de Kraken
+        url = "https://api.kraken.com/0/public/Ticker?pair=XBTUSD"
+        
+        # Timeout de 1 segundo. Si tarda más, abortamos y usamos el precio cacheado.
+        response = requests.get(url, headers=headers, timeout=1)
+        data = response.json()
+        
+        # Si Kraken devuelve error, salimos
+        if data.get('error'): return None
+            
+        # Extraemos el precio: result -> (Pair Name) -> c (Close) -> [0] (Price)
+        pair_name = list(data['result'].keys())[0]
+        price = float(data['result'][pair_name]['c'][0])
+        
+        return price
+    except:
+        return None
