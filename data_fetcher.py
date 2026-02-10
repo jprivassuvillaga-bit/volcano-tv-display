@@ -188,3 +188,28 @@ def fetch_live_price():
         return price
     except:
         return None
+        # --- AGREGAR AL FINAL DE data_fetcher.py ---
+
+@st.cache_data(ttl=3600*12) # Cache de 12 horas para no saturar
+def fetch_full_history():
+    """
+    Descarga TODO el historial de precios de Bitcoin (Max history).
+    Necesario para modelos Macro (Power Law, Seasonality, Rainbow).
+    """
+    try:
+        # Descargamos el máximo histórico disponible
+        df = yf.Ticker("BTC-USD").history(period="max", interval="1d")
+        
+        if df.empty: return pd.DataFrame()
+
+        # Limpieza básica de columnas
+        df.columns = [c.lower() for c in df.columns]
+        
+        # Eliminar zona horaria si existe
+        if df.index.tz is not None: 
+            df.index = df.index.tz_localize(None)
+        
+        return df
+    except Exception as e:
+        print(f"Error Full History: {e}")
+        return pd.DataFrame()
