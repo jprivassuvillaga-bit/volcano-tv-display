@@ -367,34 +367,42 @@ elif st.session_state.page_index == 2:
             color=liq_color
         ), unsafe_allow_html=True)
         
-      # --- VISTA 4: VISUAL ALPHA (RAINBOW & SEASONALITY) ---
+     # --- VISTA 4: VISUAL ALPHA (RAINBOW & SEASONALITY) ---
 elif st.session_state.page_index == 3:
+    
+    # Título Principal de la Sección (Opcional, si quieres quitarlo también borra esta línea)
     st.subheader("🌈 Valuation & Seasonality Cycles")
     
-    # Descarga de historia completa (cacheada)
     full_history = data_fetcher.fetch_full_history()
     
-    # Dividimos la pantalla: 60% Rainbow (Izq) | 40% Seasonality (Der)
-    c1, c2 = st.columns([3, 2])
+    c1, c2 = st.columns([3, 2]) # 60% Rainbow | 40% Seasonality
     
-    # COLUMNA 1: RAINBOW CHART (El que faltaba)
+    # COLUMNA 1: RAINBOW
     with c1:
-        st.markdown("#### 🌈 Bitcoin Rainbow Model")
+        # Header HTML Personalizado (Estilo Bitbo: Simple, Gris, Uppercase)
+        st.markdown("""
+        <div style="margin-bottom: 5px; color: #888; font-size: 14px; letter-spacing: 1px; font-weight: 600; text-transform: uppercase;">
+            🌈 Bitcoin Rainbow Valuation Model
+        </div>
+        """, unsafe_allow_html=True)
+        
         if not full_history.empty:
-            # ¡AQUÍ ESTÁ LA LÍNEA QUE FALTABA!
             st.plotly_chart(charts.create_rainbow_chart(full_history), use_container_width=True)
-            
-            # Leyenda rápida explicativa
-            st.caption("🔵 Cheap | 🟡 Fair | 🔴 Bubble")
+            # Leyenda discreta
+            st.caption("Logarithmic regression bands indicating market sentiment zones.")
         else:
-            st.warning("Loading historical data...")
+            st.warning("Loading...")
 
-    # COLUMNA 2: SEASONALITY MATRIX
+    # COLUMNA 2: SEASONALITY
     with c2:
-        st.markdown("#### ")
+        # Header HTML Personalizado
+        st.markdown("""
+        <div style="margin-bottom: 5px; color: #888; font-size: 14px; letter-spacing: 1px; font-weight: 600; text-transform: uppercase;">
+            📅 Historical Monthly Returns
+        </div>
+        """, unsafe_allow_html=True)
+        
         if not full_history.empty:
             st.plotly_chart(charts.create_seasonality_heatmap(full_history), use_container_width=True)
-            
-            # Métricas rápidas debajo del calendario
-            month_name = datetime.now().strftime("%b")
-            st.success(f"**{month_name} Historical Trend:** Usually a bullish month with accumulation patterns.")
+        else:
+            st.warning("Loading...")
