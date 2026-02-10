@@ -250,3 +250,123 @@ def create_forecast_chart(historical_df, forecast_df):
         font=dict(color='#e0e0e0'), hovermode="x unified"
     )
     return fig
+# --- 4. SEASONALITY HEATMAP (VISUAL IMPONENTE) ---
+def create_seasonality_heatmap(df):
+    if df.empty: return go.Figure()
+    
+    # Preparamos los datos
+    df_seas = df.copy()
+    df_seas['year'] = df_seas.index.year
+    df_seas['month'] = df_seas.index.month_name().str[:3] # Jan, Feb...
+    df_seas['month_num'] = df_seas.index.month
+    
+    # Calculamos retorno mensual
+    # Agrupamos por Año y Mes, tomamos el último precio y lo comparamos con el primero
+    monthly_data = df_seas.resample('M').agg({'close': ['first', 'last']})
+    monthly_data.columns = ['open', 'close']
+    monthly_data['pct_change'] = (monthly_data['close'] - monthly_data['open']) / monthly_data['open']
+    monthly_data['year'] = monthly_data.index.year
+    monthly_data['month'] = monthly_data.index.month_name().str[:3]
+    monthly_data['month_num'] = monthly_data.index.month
+
+    # Pivot Table para el Heatmap
+    heatmap_data = monthly_data.pivot(index='year', columns='month_num', values='pct_change')
+    
+    # Ordenamos meses
+    month_names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    
+    # CREACIÓN DEL HEATMAP
+    fig = go.Figure(data=go.Heatmap(
+        z=heatmap_data.values,
+        x=month_names,
+        y=heatmap_data.index,
+        colorscale=[
+            [0, '#EF4444'],      # Rojo Fuerte (Caída)
+            [0.5, '#111111'],    # Negro (Neutro)
+            [1, '#00C805']       # Verde Neón (Subida)
+        ],
+        zmid=0, # Centrar el color negro en 0%
+        text=heatmap_data.values,
+        texttemplate="%{text:.0%}", # Mostrar porcentaje dentro del cuadro
+        textfont={"size": 14, "color": "white"}, # Texto grande para TV
+        xgap=2, # Espacio entre celdas (estilo rejilla)
+        ygap=2
+    ))
+
+    fig.update_layout(
+        title="📅 Bitcoin Monthly Seasonality Matrix",
+        height=550,
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='#e0e0e0'),
+        xaxis=dict(side="top"), # Meses arriba para leer mejor
+        yaxis=dict(autorange="reversed") # Años recientes arriba
+    )
+    
+    return fig
+
+# --- 5. RAINBOW CHART (ESTILO NEÓN) ---
+def create_rainbow_chart(df):
+    if df.empty: return go.Figure()
+    
+    # Necesitamos historia completa para que se vea bien
+    # Usamos la misma lógica de Power Law pero con bandas de colores
+    # Formula simple aproximada del Rainbow: Log price regression + Desviaciones
+    
+    import numpy as np
+    from scipy import stats
+    
+    df_rain = df[df['close'] > 0].copy()
+    genesis = pd.Timestamp("2009-01-03")
+    df_rain['days'] = (df_rain.index - genesis).dt.days
+    df_rain = df_rain[df_rain['days'] > 0]
+    
+    x = np.log10(df_rain['days'])
+    y = np.log10(df_rain['close'])
+    
+    slope, intercept, _, _, _ = stats.linregress(x, y)
+    
+    # Bandas del Arcoiris (Offsets logarítmicos)
+    bands = [
+        ("Bubble Territory",  1.0,  '#FF0000'), # Rojo
+        ("FOMO",              0.75, '#FF7F00'), # Naranja
+        ("HODL",              0.5,  '#FFFF00'), # Amarillo
+        ("Still Cheap",       0.25, '#00FF00'), # Verde
+        ("Fire Sale",         0.0,  '#0000FF'), # Azul
+    ]
+    
+    fig = go.Figure()
+    
+    # Dibujamos bandas (De arriba a abajo)
+    for name, offset, color in bands:
+        # Calculamos la curva
+        y_band = 10 ** (intercept + slope * x + offset)
+        
+        fig.add_trace(go.Scatter(
+            x=df_rain.index, y=y_band,
+            mode='lines',
+            line=dict(color=color, width=2),
+            name=name
+        ))
+
+    # Precio Real (Blanco Brillante y grueso para que destaque sobre el arcoiris)
+    fig.add_trace(go.Scatter(
+        x=df_rain.index, y=df_rain['close'],
+        mode='lines',
+        line=dict(color='white', width=3),
+        name='BTC Price'
+    ))
+
+    fig.update_layout(
+        title="🌈 Bitcoin Rainbow Valuation Model",
+        yaxis_type="log",
+        height=550,
+        plot_bgcolor='rgba(0,0,0,0)',
+        paper_bgcolor='rgba(0,0,0,0)',
+        font=dict(color='#e0e0e0'),
+        hovermode="x unified",
+        showlegend=True,
+        legend=dict(orientation="h", y=0, x=0.5, xanchor="center")
+    )
+    
+    return fig
