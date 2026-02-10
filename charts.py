@@ -466,7 +466,7 @@ def create_power_law_chart(df):
     
     return fig
     
-    def create_miner_metrics_chart_tv(price_df, hash_df):
+def create_miner_metrics_chart_tv(price_df, hash_df):
     if price_df.empty or hash_df.empty: return go.Figure()
     
     # 1. Preparar Datos
