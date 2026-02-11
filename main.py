@@ -27,6 +27,74 @@ if 'tv_start_time' not in st.session_state:
     st.session_state.last_news_change = time.time()
     # Cache para el modelo AI (para no re-entrenar cada segundo)
     st.session_state.forecast_cache = None 
+    # ==============================================================================
+# --- 1.1 WATCHDOG & INTERRUPT MODE (NUEVO) ---
+# ==============================================================================
+
+# 1. Inicializar variables de interrupción si no existen
+if 'breaking_active' not in st.session_state:
+    st.session_state.breaking_active = False
+    st.session_state.breaking_data = {}
+    st.session_state.breaking_start_time = 0
+    st.session_state.last_breaking_check = 0
+
+# 2. Watchdog: Revisar YouTube cada 5 minutos (300 segs)
+current_ts_watchdog = time.time()
+if current_ts_watchdog - st.session_state.last_breaking_check > 300:
+    # Usamos try/except para que si falla YouTube no rompa el dashboard
+    try:
+        alert = news_fetcher.check_for_breaking_video()
+        if alert and alert.get('is_breaking'):
+            st.session_state.breaking_active = True
+            st.session_state.breaking_data = alert
+            st.session_state.breaking_start_time = current_ts_watchdog
+    except Exception as e:
+        print(f"Watchdog Error: {e}")
+    
+    st.session_state.last_breaking_check = current_ts_watchdog
+
+# 3. Lógica de Interrupción (Broadcast Mode)
+if st.session_state.breaking_active:
+    # Verificamos duración (Máximo 15 minutos = 900s de interrupción)
+    if current_ts_watchdog - st.session_state.breaking_start_time > 900:
+        st.session_state.breaking_active = False
+        st.rerun()
+    else:
+        # --- PANTALLA DE INTERRUPCIÓN ---
+        # Estilos específicos para esta pantalla
+        st.markdown("""
+        <style>
+            .stApp { background-color: #000000 !important; }
+            header, footer {visibility: hidden;}
+            /* Animación de pulso rojo */
+            @keyframes pulse {
+                0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+                70% { box-shadow: 0 0 0 20px rgba(220, 38, 38, 0); }
+                100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+            }
+        </style>
+        """, unsafe_allow_html=True)
+        
+        # Banner Gigante
+        st.markdown(f"""
+        <div style="background-color: #7f1d1d; color: white; padding: 40px; text-align: center; border-radius: 15px; margin-bottom: 30px; animation: pulse 2s infinite;">
+            <h1 style="margin:0; font-size: 50px; text-transform: uppercase; font-weight: 900;">🚨 BREAKING NEWS INTERRUPT</h1>
+            <h2 style="margin:15px 0 0 0; color: #fca5a5; font-size: 30px;">{st.session_state.breaking_data.get('channel', 'Live Feed')} • {st.session_state.breaking_data.get('title', 'Broadcast')}</h2>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Video en Autoplay
+        st.video(st.session_state.breaking_data['url'], autoplay=True)
+        
+        # Botón manual de salida (por si te aburres del video)
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("🔙 RETURN TO DASHBOARD (End Broadcast)", type="primary", use_container_width=True):
+            st.session_state.breaking_active = False
+            st.rerun()
+            
+        # DETENEMOS EL SCRIPT AQUÍ
+        # Esto es vital: evita que cargue Prophet, gráficos o tickers debajo del video.
+        st.stop()
     st.session_state.last_forecast_time = 0
 
 # --- LÓGICA DE PROPHET (AI FORECAST) ---
