@@ -2,6 +2,7 @@ import feedparser
 import time
 from datetime import datetime
 import random
+from youtubesearchpython import VideosSearch
 
 # --- CONFIGURACIÓN DE FUENTES ---
 RSS_FEEDS = [
@@ -132,3 +133,67 @@ def generate_mock_news():
             'date_str': '09:30'
         }
     ]
+    
+    def check_for_breaking_video():
+    """
+    Busca transmisiones en vivo o videos urgentes de fuentes confiables.
+    Retorna un diccionario con la info del video si encuentra algo, o None.
+    """
+    try:
+        # 1. LISTA VIP (Solo interrumpimos por estos canales)
+        trusted_channels = [
+            "CNBC Television", "Bloomberg Television", "Fox Business", 
+            "CoinDesk", "Yahoo Finance", "Sky News"
+        ]
+        
+        # 2. PALABRAS CLAVE DE ALTO IMPACTO (Protagonistas y Eventos)
+        # Si el título no tiene uno de estos, lo ignoramos.
+        vip_keywords = [
+            "Kevin Warsh", "Fed Chair", "FOMC", "Rate Hike", "Rate Cut", # FED
+            "Gary Gensler", "SEC Approval", "ETF Approval", # Regulación
+            "El Salvador Bitcoin", # Relevancia Local
+            "Michael Saylor", "BlackRock", "Larry Fink", # Institucional
+            "Bitcoin Crash", "Bitcoin ATH", "All Time High", "Binance" # Mercado
+        ]
+
+        # 3. BUSCAMOS "LIVE" O "BREAKING"
+        # Buscamos específicamente noticias de Bitcoin/Finanzas
+        search = VideosSearch('Bitcoin Breaking News Finance', limit=10)
+        results = search.result()['result']
+        
+        for video in results:
+            title = video['title']
+            channel = video['channel']['name']
+            publish_time = video['publishedTime'] # Ej: "LIVE", "10 minutes ago"
+            link = video['link']
+            
+            # --- FILTRO 1: CANAL CONFIABLE ---
+            if channel not in trusted_channels:
+                continue
+
+            # --- FILTRO 2: PALABRA CLAVE VIP ---
+            # Verificamos si alguna palabra VIP está en el título
+            is_vip = any(vip.lower() in title.lower() for vip in vip_keywords)
+            if not is_vip:
+                continue
+
+            # --- FILTRO 3: URGENCIA (TIEMPO) ---
+            # Solo aceptamos videos EN VIVO ("LIVE") o publicados hace MENOS DE 1 HORA
+            is_live = "live" in publish_time.lower()
+            is_fresh = "minute" in publish_time.lower() # "minutes ago"
+            
+            if is_live or is_fresh:
+                return {
+                    "is_breaking": True,
+                    "title": title,
+                    "channel": channel,
+                    "url": link,
+                    "id": video['id']
+                }
+                
+        # Si no encontramos nada relevante
+        return {"is_breaking": False}
+
+    except Exception as e:
+        print(f"Error checking breaking news: {e}")
+        return {"is_breaking": False}
