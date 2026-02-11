@@ -134,7 +134,7 @@ def generate_mock_news():
         }
     ]
     
-    def check_for_breaking_video():
+def check_for_breaking_video():
     """
     Busca transmisiones en vivo o videos urgentes de fuentes confiables.
     Retorna un diccionario con la info del video si encuentra algo, o None.
